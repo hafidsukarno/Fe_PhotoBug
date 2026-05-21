@@ -1,11 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/services/detection_service.dart';
 
 class LaporanHasilScreen extends StatelessWidget {
-  const LaporanHasilScreen({super.key});
+  final Detection detection;
+  final String? penyuluhName;
+  final int? totalPests;
+
+  LaporanHasilScreen({
+    super.key,
+    required this.detection,
+    this.penyuluhName,
+    this.totalPests,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Debug image loading
+    print('================== IMAGE DEBUG ==================');
+    print('📸 Image Path: ${detection.imagePath}');
+    print('🔗 API URL: http://localhost:8000/api/image/${detection.imagePath}');
+    print('🌐 Base URL: http://localhost:8000');
+    print('📁 Storage endpoint: /api/image/');
+    print('===============================================');
+    
     final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
@@ -143,9 +162,11 @@ class LaporanHasilScreen extends StatelessWidget {
                                     ),
                                   ),
                                   alignment: Alignment.center,
-                                  child: const Text(
-                                    'BS',
-                                    style: TextStyle(
+                                  child: Text(
+                                    (AuthService.userName?.isNotEmpty ?? false)
+                                        ? AuthService.userName![0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 16,
@@ -153,29 +174,18 @@ class LaporanHasilScreen extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                const Expanded(
+                                Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'Budi Santoso',
-                                        style: TextStyle(
+                                        AuthService.userName ?? 'Pengguna',
+                                        style: const TextStyle(
                                           fontWeight: FontWeight.w800,
                                           color: Color(0xFF1A1A2E),
                                           fontSize: 14.5,
                                         ),
-                                      ),
-                                      SizedBox(height: 1),
-                                      Text(
-                                        'petani@gmail.com',
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          color: Colors.grey,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
                                   ),
@@ -214,13 +224,19 @@ class LaporanHasilScreen extends StatelessWidget {
                           ),
                         ),
                       ],
-                      onSelected: (value) {
+                      onSelected: (value) async {
                         if (value == 1) {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LoginScreen()),
-                            (route) => false,
-                          );
+                          // Call logout API
+                          await AuthService.logout();
+                          
+                          // Navigate to login
+                          if (context.mounted) {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(builder: (context) => const LoginScreen()),
+                              (route) => false,
+                            );
+                          }
                         }
                       },
                     ),
@@ -263,7 +279,7 @@ class LaporanHasilScreen extends StatelessWidget {
                       border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Text(
-                      'ID: RPT-2026-0412-049 · 12 Apr 2026',
+                      '${_formatDate(detection.detectedAt)}, ${detection.detectedAt.hour.toString().padLeft(2, '0')}:${detection.detectedAt.minute.toString().padLeft(2, '0')}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -299,16 +315,48 @@ class LaporanHasilScreen extends StatelessWidget {
                               child: SizedBox(
                                 height: 160,
                                 width: double.infinity,
-                                child: Image.asset(
-                                  'assets/images/gambartest.png',
+                                child: Image.network(
+                                  'http://localhost:8000/api/image/${detection.imagePath}',
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    color: Colors.grey.shade200,
-                                    child: const Center(
-                                      child: Icon(Icons.image,
-                                          color: Colors.grey, size: 40),
-                                    ),
-                                  ),
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    final imageUrl = 'http://localhost:8000/storage/${detection.imagePath}';
+                                    print('❌ IMAGE LOAD ERROR ❌');
+                                    print('Error: $error');
+                                    print('Image path: ${detection.imagePath}');
+                                    print('Full URL: $imageUrl');
+                                    return Container(
+                                      color: Colors.grey.shade200,
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.broken_image, color: Colors.grey, size: 40),
+                                            const SizedBox(height: 8),
+                                            const Text(
+                                              'Gambar gagal dimuat',
+                                              style: TextStyle(
+                                                color: Colors.grey,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 12,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),
@@ -319,18 +367,27 @@ class LaporanHasilScreen extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEF5350),
+                                  color: _getDetectionStatus() == 'detected'
+                                      ? const Color(0xFFEF5350)
+                                      : Colors.grey.shade500,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.warning_amber_rounded,
-                                        color: Colors.white, size: 14),
-                                    SizedBox(width: 4),
+                                    Icon(
+                                      _getDetectionStatus() == 'detected'
+                                          ? Icons.warning_amber_rounded
+                                          : Icons.info_rounded,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      'Hama Terdeteksi',
-                                      style: TextStyle(
+                                      _getDetectionStatus() == 'detected'
+                                          ? 'Hama Terdeteksi'
+                                          : 'Tidak Terdeteksi',
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 11,
                                         fontWeight: FontWeight.w800,
@@ -359,7 +416,7 @@ class LaporanHasilScreen extends StatelessWidget {
                                       width: 80,
                                       height: 80,
                                       child: CircularProgressIndicator(
-                                        value: 0.94,
+                                        value: (detection.getHighestConfidenceResult()?.getConfidenceDouble() ?? 0) / 1.0,
                                         strokeWidth: 8,
                                         backgroundColor:
                                             Colors.grey.shade200,
@@ -371,9 +428,9 @@ class LaporanHasilScreen extends StatelessWidget {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        const Text(
-                                          '94%',
-                                          style: TextStyle(
+                                        Text(
+                                          '${detection.getHighestConfidenceResult()?.getConfidencePercent() ?? 0}%',
+                                          style: const TextStyle(
                                             fontSize: 22,
                                             fontWeight: FontWeight.w900,
                                             color: Color(0xFF7B1FA2),
@@ -410,9 +467,9 @@ class LaporanHasilScreen extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    const Text(
-                                      'Wereng Coklat',
-                                      style: TextStyle(
+                                    Text(
+                                      _getDisplayPestName(),
+                                      style: const TextStyle(
                                         fontSize: 22,
                                         fontWeight: FontWeight.w900,
                                         color: Color(0xFF4A148C),
@@ -420,14 +477,6 @@ class LaporanHasilScreen extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(height: 2),
-                                    Text(
-                                      'Nilaparvata lugens',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontStyle: FontStyle.italic,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
                                     const SizedBox(height: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -435,9 +484,9 @@ class LaporanHasilScreen extends StatelessWidget {
                                         color: const Color(0xFFFFF3E0),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: const Text(
-                                        'Jumlah Hama: 4 Ekor',
-                                        style: TextStyle(
+                                      child: Text(
+                                        'Jumlah Hama: ${_getDisplayPestCount()} Ekor',
+                                        style: const TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w700,
                                           color: Color(0xFFE65100),
@@ -454,11 +503,11 @@ class LaporanHasilScreen extends StatelessWidget {
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
-                                            'AI Photobug · Akurasi 94%',
-                                            style: TextStyle(
+                                            'AI Photobug · Akurasi ${detection.getHighestConfidenceResult()?.getConfidencePercent() ?? 0}%',
+                                            style: const TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w800,
-                                              color: const Color(0xFFE65100),
+                                              color: Color(0xFFE65100),
                                             ),
                                           ),
                                         ),
@@ -528,9 +577,9 @@ class LaporanHasilScreen extends StatelessWidget {
                                   const SizedBox(height: 2),
                                   Row(
                                     children: [
-                                      const Text(
-                                        'Ds. Sukamaju, Kec. Ciawi',
-                                        style: TextStyle(
+                                      Text(
+                                        detection.villageName ?? 'Lokasi Tidak Diketahui',
+                                        style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
                                           color: Color(0xFF2C3E50),
@@ -553,6 +602,49 @@ class LaporanHasilScreen extends StatelessWidget {
                                         ),
                                       ),
                                     ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Container(height: 1, color: Colors.grey.shade200),
+                        const SizedBox(height: 16),
+                        // Deskripsi Petani
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.description_rounded, color: Color(0xFF4CAF50), size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Deskripsi dari Petani',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    detection.description.isNotEmpty ? detection.description : 'Tidak ada deskripsi',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF2C3E50),
+                                    ),
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
@@ -586,9 +678,9 @@ class LaporanHasilScreen extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 2),
-                                  const Text(
-                                    'Ahmad Penyuluh',
-                                    style: TextStyle(
+                                  Text(
+                                    penyuluhName ?? 'Penyuluh',
+                                    style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: Color(0xFF2C3E50),
@@ -649,7 +741,9 @@ class LaporanHasilScreen extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            'Berdasarkan hasil analisis gambar, hama yang menyerang lahan Anda teridentifikasi sebagai Wereng Coklat. Untuk mengendalikan populasi hama ini secara efektif, disarankan agar Anda segera melakukan pengeringan lahan sawah selama 5 hingga 7 hari. Tindakan drainase ini sangat penting untuk memutus siklus hidup hama. Selain itu, Anda perlu mengaplikasikan insektisida berbahan aktif Buprofezin (misal: 25 WP) dengan dosis 1-2 liter per hektar, dengan penyemprotan difokuskan pada bagian pangkal batang padi. Lakukan pemantauan rutin setiap 2 hari sekali dan bersihkan gulma di sekitar pematang untuk menghilangkan sarang alternatif. Untuk musim tanam berikutnya, pertimbangkan menggunakan varietas bibit padi yang lebih tahan hama seperti Inpari 33.',
+                            detection.recommendations.isNotEmpty
+                                ? detection.recommendations[0].recommendationText
+                                : 'Silakan konsultasikan dengan penyuluh untuk penanganan lebih lanjut.',
                             style: TextStyle(
                               fontSize: 13,
                               height: 1.6,
@@ -670,6 +764,43 @@ class LaporanHasilScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // Helper method to check if detection is valid (accuracy >= 50%)
+  bool _isValidDetection() {
+    final confidence = detection.getHighestConfidenceResult()?.getConfidenceDouble() ?? 0;
+    return confidence >= 0.5;
+  }
+
+  // Get detection status
+  String _getDetectionStatus() {
+    return _isValidDetection() ? 'detected' : 'not_detected';
+  }
+
+  // Get display pest name
+  String _getDisplayPestName() {
+    if (_isValidDetection()) {
+      return detection.getHighestConfidenceResult()?.pestName ?? 'Tidak Terdeteksi';
+    }
+    return 'Tidak Terdeteksi';
+  }
+
+  // Get display pest count
+  int _getDisplayPestCount() {
+    if (_isValidDetection()) {
+      return totalPests ?? 0;
+    }
+    return 0;
+  }
+
+  // Helper method to format date
+  String _formatDate(DateTime date) {
+    return '${date.day} ${_getMonthName(date.month)} ${date.year}';
+  }
+
+  String _getMonthName(int month) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month - 1];
   }
 
   // ========== BOTTOM NAV ==========

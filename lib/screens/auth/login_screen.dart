@@ -3,6 +3,7 @@ import 'package:fe_photobug/screens/auth/register_screen.dart';
 import 'package:fe_photobug/screens/petani/petani_dashboard_screen.dart';
 import 'package:fe_photobug/screens/penyuluh/penyuluh_dashboard_screen.dart';
 import 'package:fe_photobug/screens/admin/admin_dashboard_screen.dart';
+import 'package:fe_photobug/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,9 +14,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -43,44 +45,86 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     _animController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() {
-    final email = _emailController.text.trim().toLowerCase();
+  void _handleLogin() async {
+    final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      _showSnackBar('Email dan kata sandi harus diisi!', Colors.red);
+    if (username.isEmpty || password.isEmpty) {
+      _showSnackBar('Username dan kata sandi harus diisi!', Colors.red);
       return;
     }
 
-    Widget? destination;
+    setState(() {
+      _isLoading = true;
+    });
 
-    if (email == 'petani@gmail.com') {
-      destination = const PetaniDashboardScreen();
-    } else if (email == 'penyuluh@gmail.com') {
-      destination = const PenyuluhDashboardScreen();
-    } else if (email == 'admin@gmail.com') {
-      destination = const AdminDashboardScreen();
-    }
+    final response = await AuthService.login(
+      username: username,
+      password: password,
+    );
 
-    if (destination != null) {
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => destination!,
-          transitionsBuilder: (_, anim, __, child) {
-            return FadeTransition(opacity: anim, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 400),
-        ),
-      );
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (!mounted) return;
+
+    if (response.success) {
+      final userName = response.user?['name'] ?? 'User';
+      final userRole = response.role ?? 'Unknown';
+      
+      _showLoginSuccessSnackBar(userName, userRole);
+      
+      // Tentukan destinasi berdasarkan role dari API
+      Widget? destination;
+      final role = response.role?.toString().toLowerCase() ?? '';
+
+      print('=== ROUTE DEBUG ===');
+      print('Role value: "$role"');
+      print('Role type: ${response.role.runtimeType}');
+
+      if (role.contains('petani')) {
+        print('→ Navigasi ke Petani Dashboard');
+        destination = const PetaniDashboardScreen();
+      } else if (role.contains('penyuluh')) {
+        print('→ Navigasi ke Penyuluh Dashboard');
+        destination = const PenyuluhDashboardScreen();
+      } else if (role.contains('admin')) {
+        print('→ Navigasi ke Admin Dashboard');
+        destination = const AdminDashboardScreen();
+      } else {
+        print('❌ Role tidak match: $role');
+      }
+
+      if (destination != null) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (_, __, ___) => destination!,
+                transitionsBuilder: (_, anim, __, child) {
+                  return FadeTransition(opacity: anim, child: child);
+                },
+                transitionDuration: const Duration(milliseconds: 400),
+              ),
+            );
+          }
+        });
+      } else {
+        _showSnackBar(
+          'Role pengguna tidak dikenali. Hubungi administrator.',
+          Colors.orange,
+        );
+      }
     } else {
-      _showSnackBar('Email tidak terdaftar!', Colors.red);
+      _showSnackBar(response.message, Colors.red);
     }
   }
 
@@ -92,6 +136,85 @@ class _LoginScreenState extends State<LoginScreen>
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showLoginSuccessSnackBar(String userName, String userRole) {
+    final roleEmoji = {
+      'petani': '🌾',
+      'penyuluh': '📚',
+      'admin': '⚙️',
+    }[userRole.toLowerCase()] ?? '✨';
+
+    final roleLabel = {
+      'petani': 'Petani',
+      'penyuluh': 'Penyuluh',
+      'admin': 'Administrator',
+    }[userRole.toLowerCase()] ?? userRole;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Login Berhasil!',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$roleEmoji $userName • $roleLabel',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  minHeight: 2,
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: const Color(0xFF4CAF50),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        duration: const Duration(seconds: 3),
+        elevation: 8,
       ),
     );
   }
@@ -181,14 +304,14 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             SizedBox(height: screenHeight * 0.032),
 
-                            // Email Field
-                            _buildLabel('Email'),
+                            // Username Field
+                            _buildLabel('Username'),
                             const SizedBox(height: 8),
                             _buildTextField(
-                              controller: _emailController,
-                              hint: 'budi_santoso@gmail.com',
-                              icon: Icons.email_outlined,
-                              keyboardType: TextInputType.emailAddress,
+                              controller: _usernameController,
+                              hint: 'Daniel',
+                              icon: Icons.person_outline,
+                              keyboardType: TextInputType.text,
                             ),
                             SizedBox(height: screenHeight * 0.025),
 
@@ -252,10 +375,11 @@ class _LoginScreenState extends State<LoginScreen>
                             children: [
                               // Masuk Button
                               _buildPrimaryButton(
-                                label: 'Masuk',
-                                onPressed: () {
+                                label: _isLoading ? 'Memproses...' : 'Masuk',
+                                onPressed: _isLoading ? null : () {
                                   _handleLogin();
                                 },
+                                isLoading: _isLoading,
                               ),
                               const SizedBox(height: 20),
 
@@ -545,7 +669,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildPrimaryButton({
     required String label,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
+    bool isLoading = false,
   }) {
     return SizedBox(
       width: double.infinity,
@@ -560,22 +685,32 @@ class _LoginScreenState extends State<LoginScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
+          disabledBackgroundColor: const Color(0xFFB39DDB),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
+        child: isLoading
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  strokeWidth: 2.5,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded, size: 20),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_rounded, size: 20),
-          ],
-        ),
       ),
     );
   }

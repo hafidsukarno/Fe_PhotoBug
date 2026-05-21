@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/petani/laporan_view.dart';
 import 'package:fe_photobug/screens/petani/riwayat_laporan_view.dart';
-
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/services/report_service.dart';
 
 class PetaniDashboardScreen extends StatefulWidget {
   const PetaniDashboardScreen({super.key});
@@ -13,6 +14,31 @@ class PetaniDashboardScreen extends StatefulWidget {
 
 class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
   int _currentIndex = 0;
+  bool _isLoadingStatus = true;
+  String _petaniVillage = 'Loading...';
+  late ReportStatusResponse _reportStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReportStatus();
+    _loadPetaniVillage();
+  }
+
+  Future<void> _loadPetaniVillage() async {
+    final village = await AuthService.getPetaniVillage();
+    setState(() {
+      _petaniVillage = village;
+    });
+  }
+
+  Future<void> _loadReportStatus() async {
+    final status = await ReportService.getReportStatus();
+    setState(() {
+      _reportStatus = status;
+      _isLoadingStatus = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,19 +261,10 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
                           width: 1.5,
                         ),
                       ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/gambartest.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            child: const Icon(
-                              Icons.person_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
-                        ),
+                      child: const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                     itemBuilder: (context) => [
@@ -267,9 +284,11 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
                                   ),
                                 ),
                                 alignment: Alignment.center,
-                                child: const Text(
-                                  'BS',
-                                  style: TextStyle(
+                                child: Text(
+                                  (AuthService.userName?.isNotEmpty ?? false)
+                                      ? AuthService.userName![0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 16,
@@ -277,29 +296,18 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Expanded(
+                              Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Budi Santoso',
-                                      style: TextStyle(
+                                      AuthService.userName ?? 'Pengguna',
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                         color: Color(0xFF1A1A2E),
                                         fontSize: 14.5,
                                       ),
-                                    ),
-                                    SizedBox(height: 1),
-                                    Text(
-                                      'petani@gmail.com',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        color: Colors.grey,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
@@ -338,13 +346,19 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
                         ),
                       ),
                     ],
-                    onSelected: (value) {
+                    onSelected: (value) async {
                       if (value == 1) {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (context) => const LoginScreen()),
-                          (route) => false,
-                        );
+                        // Call logout API
+                        await AuthService.logout();
+                        
+                        // Navigate to login
+                        if (mounted) {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                            (route) => false,
+                          );
+                        }
                       }
                     },
                   ),
@@ -376,7 +390,7 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Desa Hergamanah • Lahan Terpantau Aman',
+                      'Desa $_petaniVillage • Lahan Terpantau Aman',
                       style: TextStyle(
                         fontSize: 11.5,
                         color: Colors.white.withValues(alpha: 0.9),
@@ -389,16 +403,16 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
               const SizedBox(height: 20),
 
               // Greeting
-              const Text(
-                'Halo, Budi Santoso 👋',
-                style: TextStyle(
+              Text(
+                'Halo, ${AuthService.userName} 👋',
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 12),
               Text(
                 'Pantau hama wereng dan kirim laporan sawah Anda hari ini.',
                 style: TextStyle(
@@ -416,6 +430,54 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
 
   // ========== STATS ==========
   Widget _buildStatsGrid() {
+    if (_isLoadingStatus) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: SizedBox(
+            height: 60,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!_reportStatus.success) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            'Gagal memuat data: ${_reportStatus.message}',
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -435,7 +497,7 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
             child: _buildStatCard(
               icon: Icons.assignment_rounded,
               label: 'Laporan',
-              value: '3',
+              value: '${_reportStatus.totalSent}',
               color: const Color(0xFF7B1FA2),
             ),
           ),
@@ -444,7 +506,7 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
             child: _buildStatCard(
               icon: Icons.check_circle_rounded,
               label: 'Diverifikasi',
-              value: '2',
+              value: '${_reportStatus.verified}',
               color: const Color(0xFF1565C0),
             ),
           ),
@@ -453,7 +515,7 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
             child: _buildStatCard(
               icon: Icons.hourglass_top_rounded,
               label: 'Pending',
-              value: '1',
+              value: '${_reportStatus.waitingVerification}',
               color: const Color(0xFFEF6C00),
             ),
           ),

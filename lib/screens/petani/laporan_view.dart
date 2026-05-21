@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/petani/laporan_hasil_screen.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/services/detection_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:typed_data';
 
 class LaporanView extends StatefulWidget {
   const LaporanView({super.key});
@@ -11,12 +16,88 @@ class LaporanView extends StatefulWidget {
 
 class _LaporanViewState extends State<LaporanView> {
   bool _hasImage = false;
+  File? _selectedImageFile;
+  Uint8List? _imageBytes;
+  bool _isSubmitting = false;
   final TextEditingController _descController = TextEditingController();
 
   @override
   void dispose() {
     _descController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _selectedImageFile = File(image.path);
+          _imageBytes = bytes;
+          _hasImage = true;
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memilih foto: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitReport() async {
+    if (_selectedImageFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silakan pilih foto terlebih dahulu')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    final response = await DetectionService.submitDetection(
+      imageBytes: _imageBytes!,
+      fileName: _selectedImageFile?.path.split('/').last ?? 'image.jpg',
+      description: _descController.text,
+    );
+
+    setState(() {
+      _isSubmitting = false;
+    });
+
+    if (mounted) {
+      if (response.success) {
+        // Clear form and navigate with detection data
+        setState(() {
+          _hasImage = false;
+          _selectedImageFile = null;
+          _descController.clear();
+        });
+        
+        // Navigate to result screen with detection data
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LaporanHasilScreen(
+              detection: response.detection!,
+              penyuluhName: response.penyuluhName,
+              totalPests: response.totalPests,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(response.message)),
+        );
+      }
+    }
   }
 
   @override
@@ -130,19 +211,10 @@ class _LaporanViewState extends State<LaporanView> {
                               width: 1.5,
                             ),
                           ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              'assets/images/gambartest.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                child: const Icon(
-                                  Icons.person_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                              ),
-                            ),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            color: Colors.white,
+                            size: 24,
                           ),
                         ),
                         itemBuilder: (context) => [
@@ -162,9 +234,11 @@ class _LaporanViewState extends State<LaporanView> {
                                       ),
                                     ),
                                     alignment: Alignment.center,
-                                    child: const Text(
-                                      'BS',
-                                      style: TextStyle(
+                                    child: Text(
+                                      (AuthService.userName?.isNotEmpty ?? false)
+                                          ? AuthService.userName![0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w900,
                                         fontSize: 16,
@@ -172,29 +246,18 @@ class _LaporanViewState extends State<LaporanView> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  const Expanded(
+                                  Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          'Budi Santoso',
-                                          style: TextStyle(
+                                          AuthService.userName ?? 'Pengguna',
+                                          style: const TextStyle(
                                             fontWeight: FontWeight.w800,
                                             color: Color(0xFF1A1A2E),
                                             fontSize: 14.5,
                                           ),
-                                        ),
-                                        SizedBox(height: 1),
-                                        Text(
-                                          'petani@gmail.com',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            color: Colors.grey,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
                                     ),
@@ -233,13 +296,19 @@ class _LaporanViewState extends State<LaporanView> {
                             ),
                           ),
                         ],
-                        onSelected: (value) {
+                        onSelected: (value) async {
                           if (value == 1) {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (context) => const LoginScreen()),
-                              (route) => false,
-                            );
+                            // Call logout API
+                            await AuthService.logout();
+                            
+                            // Navigate to login
+                            if (mounted) {
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                (route) => false,
+                              );
+                            }
                           }
                         },
                       ),
@@ -281,11 +350,7 @@ class _LaporanViewState extends State<LaporanView> {
 
                 // Image Upload Section
                 GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _hasImage = !_hasImage;
-                    });
-                  },
+                  onTap: _pickImage,
                   child: Container(
                     width: double.infinity,
                     height: 180,
@@ -306,27 +371,38 @@ class _LaporanViewState extends State<LaporanView> {
                           offset: const Offset(0, 4),
                         ),
                       ],
-                      image: _hasImage
-                          ? const DecorationImage(
-                              image: AssetImage('assets/images/gambartest.png'),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
                     ),
-                    child: _hasImage
+                    child: _hasImage && _imageBytes != null
                         ? Stack(
                             children: [
+                              // Display selected image
+                              Image.memory(
+                                _imageBytes!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: 180,
+                              ),
+                              // Remove button
                               Positioned(
                                 top: 12,
                                 right: 12,
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.black54,
-                                    shape: BoxShape.circle,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _hasImage = false;
+                                      _selectedImageFile = null;
+                                      _imageBytes = null;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close_rounded,
+                                        color: Colors.white, size: 20),
                                   ),
-                                  child: const Icon(Icons.close_rounded,
-                                      color: Colors.white, size: 20),
                                 ),
                               ),
                             ],
@@ -398,73 +474,9 @@ class _LaporanViewState extends State<LaporanView> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Location Field
-                      const Text(
-                        'Lokasi Sawah',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FA),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on_outlined,
-                              color: Color(0xFFE53935),
-                              size: 22,
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Text(
-                                'Ds. Sukamaju, Kec. Ciawi',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF2C3E50),
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE8F5E9),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Text(
-                                    'GPS',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF2E7D32),
-                                    ),
-                                  ),
-                                  SizedBox(width: 2),
-                                  Icon(Icons.check_rounded,
-                                      size: 12, color: Color(0xFF2E7D32)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
                       // Description Field
                       const Text(
-                        'Deskripsi Kerusakan',
+                        'Deskripsi Hama',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -509,7 +521,7 @@ class _LaporanViewState extends State<LaporanView> {
                 ),
                 const SizedBox(height: 32),
 
-                // Submit Button
+                // Submit Button - Deteksi dan Kirim Laporan ke Penyuluh
                 Container(
                   width: double.infinity,
                   height: 56,
@@ -529,30 +541,37 @@ class _LaporanViewState extends State<LaporanView> {
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LaporanHasilScreen(),
-                          ),
-                        );
-                      },
+                      onTap: _isSubmitting ? null : _submitReport,
                       borderRadius: BorderRadius.circular(18),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.camera_alt_outlined, color: Colors.white),
-                          SizedBox(width: 10),
-                          Text(
-                            'Deteksi dan Kirim Laporan ke Penyuluh',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                      child: _isSubmitting
+                          ? const Center(
+                              child: SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.camera_alt_outlined,
+                                    color: Colors.white),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Deteksi dan Kirim Laporan ke Penyuluh',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                 ),

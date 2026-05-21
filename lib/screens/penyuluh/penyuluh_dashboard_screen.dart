@@ -3,6 +3,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:fe_photobug/screens/penyuluh/laporan_penyuluh_view.dart';
 import 'package:fe_photobug/screens/penyuluh/notifikasi_penyuluh_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/services/penyuluh_service.dart';
+import 'package:fe_photobug/services/auth_service.dart';
 
 class PenyuluhDashboardScreen extends StatefulWidget {
   const PenyuluhDashboardScreen({super.key});
@@ -13,6 +15,36 @@ class PenyuluhDashboardScreen extends StatefulWidget {
 
 class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   int _currentIndex = 0;
+  bool _isLoadingStatus = true;
+  bool _isLoadingTrend = true;
+  String _villageName = 'Memuat...';
+  late PenyuluhReportStatusResponse _reportStatus;
+  late PestTrendResponse _pestTrend;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final status = await PenyuluhService.getReportStatus();
+    final trend = await PenyuluhService.getPestTrend();
+    final villagesData = await PenyuluhService.getVillages();
+    
+    String villageText = 'Desa Tidak Diketahui';
+    if (villagesData.success && villagesData.data.isNotEmpty) {
+      villageText = 'Desa ${villagesData.data.join(", ")}';
+    }
+
+    setState(() {
+      _reportStatus = status;
+      _pestTrend = trend;
+      _villageName = villageText;
+      _isLoadingStatus = false;
+      _isLoadingTrend = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,16 +87,6 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                   const SizedBox(height: 12),
                   _buildStatsRow(),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Tren Deteksi Hama',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF4A148C),
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   _buildChartCard(),
                   const SizedBox(height: 24),
                   const Text(
@@ -235,19 +257,10 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                               width: 1.5,
                             ),
                           ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              'assets/images/gambartest.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                child: const Icon(
-                                  Icons.person_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                              ),
-                            ),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            color: Colors.white,
+                            size: 24,
                           ),
                         ),
                         itemBuilder: (context) => [
@@ -267,9 +280,11 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                                       ),
                                     ),
                                     alignment: Alignment.center,
-                                    child: const Text(
-                                      'IS',
-                                      style: TextStyle(
+                                    child: Text(
+                                      (AuthService.userName?.isNotEmpty ?? false)
+                                          ? AuthService.userName![0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w900,
                                         fontSize: 16,
@@ -277,29 +292,18 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  const Expanded(
+                                  Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          'Irwan Setiawan',
-                                          style: TextStyle(
+                                          AuthService.userName ?? 'Pengguna',
+                                          style: const TextStyle(
                                             fontWeight: FontWeight.w800,
                                             color: Color(0xFF1A1A2E),
                                             fontSize: 14.5,
                                           ),
-                                        ),
-                                        SizedBox(height: 1),
-                                        Text(
-                                          'penyuluh@gmail.com',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            color: Colors.grey,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
                                     ),
@@ -309,34 +313,6 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                             ),
                           ),
                           const PopupMenuDivider(),
-                          PopupMenuItem(
-                            value: 0,
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFF3E5F5),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.person_outline_rounded,
-                                    color: Color(0xFF7B1FA2),
-                                    size: 18,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Lihat Profil',
-                                  style: TextStyle(
-                                    color: Color(0xFF7B1FA2),
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                           PopupMenuItem(
                             value: 1,
                             child: Row(
@@ -366,13 +342,16 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                             ),
                           ),
                         ],
-                        onSelected: (value) {
+                        onSelected: (value) async {
                           if (value == 1) {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (context) => const LoginScreen()),
-                              (route) => false,
-                            );
+                            await AuthService.logout();
+                            if (mounted) {
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                (route) => false,
+                              );
+                            }
                           }
                         },
                       ),
@@ -406,7 +385,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Penyuluh Pertanian • Desa Hergamanah Aktif',
+                      'Penyuluh Pertanian • $_villageName Aktif',
                       style: TextStyle(
                         fontSize: 11.5,
                         color: Colors.white.withValues(alpha: 0.9),
@@ -419,9 +398,9 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
               const SizedBox(height: 20),
 
               // Greeting
-              const Text(
-                'Halo, Irwan Setiawan 👋',
-                style: TextStyle(
+              Text(
+                'Halo, ${AuthService.userName ?? 'Penyuluh'} 👋',
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
@@ -445,6 +424,27 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   }
 
   Widget _buildStatsRow() {
+    if (_isLoadingStatus) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20.0),
+          child: CircularProgressIndicator(),
+        )
+      );
+    }
+
+    if (!_reportStatus.success) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text(
+            'Gagal memuat data: ${_reportStatus.message}',
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      );
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -453,7 +453,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
             icon: Icons.assignment_rounded, // Same as petani
             iconColor: const Color(0xFF7B1FA2),
             iconBg: const Color(0xFFF3E5F5),
-            value: '3',
+            value: '${_reportStatus.totalIncoming}',
             label: 'Laporan\nMasuk',
           ),
         ),
@@ -463,7 +463,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
             icon: Icons.hourglass_top_rounded, // Same as petani
             iconColor: const Color(0xFFF57C00),
             iconBg: const Color(0xFFFFF3E0),
-            value: '1',
+            value: '${_reportStatus.waitingVerification}',
             label: 'Menunggu',
           ),
         ),
@@ -473,7 +473,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
             icon: Icons.check_circle_rounded, // Same as petani
             iconColor: const Color(0xFF2E7D32),
             iconBg: const Color(0xFFE8F5E9),
-            value: '2',
+            value: '${_reportStatus.completed}',
             label: 'Selesai',
           ),
         ),
@@ -537,6 +537,37 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   }
 
   Widget _buildChartCard() {
+    if (_isLoadingTrend) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(20.0),
+        child: CircularProgressIndicator(),
+      ));
+    }
+
+    if (!_pestTrend.success) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text('Gagal memuat tren: ${_pestTrend.message}', style: const TextStyle(color: Colors.red)),
+        ),
+      );
+    }
+
+    int hijauTotal = 0;
+    int coklatTotal = 0;
+    
+    for (var trend in _pestTrend.data) {
+      if (trend.pestName.toLowerCase().contains('hijau')) {
+        hijauTotal = trend.totalDetected;
+      } else if (trend.pestName.toLowerCase().contains('coklat')) {
+        coklatTotal = trend.totalDetected;
+      }
+    }
+
+    int total = hijauTotal + coklatTotal;
+    double hijauPercent = total == 0 ? 0 : (hijauTotal / total) * 100;
+    double coklatPercent = total == 0 ? 0 : (coklatTotal / total) * 100;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -554,166 +585,61 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Tren Hama Wareng 6 Bulan Terakhir',
+            'Distribusi Jenis Hama',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF4A148C),
+              color: Color(0xFF1A1A2E),
             ),
           ),
           const SizedBox(height: 24),
-          SizedBox(
-            height: 160,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: true,
-                  horizontalInterval: 9,
-                  verticalInterval: 1,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: Colors.grey.shade100,
-                      strokeWidth: 1,
-                      dashArray: [5, 5],
-                    );
-                  },
-                  getDrawingVerticalLine: (value) {
-                    return FlLine(
-                      color: Colors.grey.shade100,
-                      strokeWidth: 1,
-                      dashArray: [5, 5],
-                    );
-                  },
-                ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 30,
-                      interval: 1,
-                      getTitlesWidget: (value, meta) {
-                        const style = TextStyle(
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 10,
-                        );
-                        Widget text;
-                        switch (value.toInt()) {
-                          case 0:
-                            text = const Text('Jan', style: style);
-                            break;
-                          case 1:
-                            text = const Text('Feb', style: style);
-                            break;
-                          case 2:
-                            text = const Text('Mar', style: style);
-                            break;
-                          case 3:
-                            text = const Text('Apr', style: style);
-                            break;
-                          case 4:
-                            text = const Text('Mei', style: style);
-                            break;
-                          case 5:
-                            text = const Text('Jun', style: style);
-                            break;
-                          default:
-                            text = const Text('', style: style);
-                            break;
-                        }
-                        return SideTitleWidget(
-                          meta: meta,
-                          space: 6, // Jarak teks dengan garis bawah
-                          child: text,
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 9,
-                      reservedSize: 32, // Sedikit diperbesar dari 30
-                      getTitlesWidget: (value, meta) {
-                        return SideTitleWidget(
-                          meta: meta,
-                          space: 8, // Menambahkan jarak teks dengan grafik (Y-axis)
-                          child: Text(
-                            value.toInt().toString(),
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 10,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                minX: 0,
-                maxX: 5,
-                minY: 0,
-                maxY: 36,
-                lineBarsData: [
-                  // Hijau line
-                  LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 18),
-                      FlSpot(1, 24),
-                      FlSpot(2, 20),
-                      FlSpot(3, 37), // slightly over 36 to match the peak
-                      FlSpot(4, 30),
-                      FlSpot(5, 33),
-                    ],
-                    isCurved: true,
-                    color: const Color(0xFF2E7D32),
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
-                    ),
-                  ),
-                  // Coklat line
-                  LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 5),
-                      FlSpot(1, 8),
-                      FlSpot(2, 10),
-                      FlSpot(3, 12),
-                      FlSpot(4, 9),
-                      FlSpot(5, 14),
-                    ],
-                    isCurved: true,
-                    color: const Color(0xFFE65100),
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xFFE65100).withValues(alpha: 0.1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          // Legends
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildLegend(const Color(0xFF2E7D32), 'Wareng Hijau'),
-              const SizedBox(width: 24),
-              _buildLegend(const Color(0xFFE65100), 'Wareng Coklat'),
+              SizedBox(
+                height: 120,
+                width: 120,
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 0,
+                    centerSpaceRadius: 35,
+                    startDegreeOffset: -90,
+                    sections: total == 0 
+                      ? [
+                          PieChartSectionData(
+                            value: 1,
+                            color: Colors.grey.shade200,
+                            title: '',
+                            radius: 25,
+                          )
+                        ]
+                      : [
+                          PieChartSectionData(
+                            value: coklatTotal.toDouble(),
+                            color: const Color(0xFF1B5E20),
+                            title: '',
+                            radius: 25,
+                          ),
+                          PieChartSectionData(
+                            value: hijauTotal.toDouble(),
+                            color: const Color(0xFF00BFA5),
+                            title: '',
+                            radius: 25,
+                          ),
+                        ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 32),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildLegendPercent(const Color(0xFF1B5E20), 'Wereng Coklat', '${coklatPercent.toStringAsFixed(0)}%'),
+                    const SizedBox(height: 16),
+                    _buildLegendPercent(const Color(0xFF00BFA5), 'Wereng Hijau', '${hijauPercent.toStringAsFixed(0)}%'),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -721,24 +647,37 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
     );
   }
 
-  Widget _buildLegend(Color color, String text) {
+  Widget _buildLegendPercent(Color color, String label, String percent) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade800,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
         Text(
-          text,
+          percent,
           style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade700,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: color,
           ),
         ),
       ],

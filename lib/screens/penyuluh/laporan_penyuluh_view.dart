@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/penyuluh/laporan_detail_penyuluh_screen.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/services/penyuluh_service.dart';
+import 'package:fe_photobug/services/auth_service.dart';
 
 class LaporanPenyuluhView extends StatefulWidget {
   final double topPadding;
@@ -31,9 +33,9 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
           Expanded(
             child: TabBarView(
               children: [
-                _buildListView(context, includeWaiting: true, includeFinished: true),
-                _buildListView(context, includeWaiting: true, includeFinished: false),
-                _buildListView(context, includeWaiting: false, includeFinished: true),
+                _buildListView(PenyuluhService.getReports('all'), 'Semua Laporan'),
+                _buildListView(PenyuluhService.getReports('pending'), 'Laporan Menunggu'),
+                _buildListView(PenyuluhService.getReports('completed'), 'Laporan Selesai'),
               ],
             ),
           ),
@@ -146,19 +148,10 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                           width: 1.5,
                         ),
                       ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/gambartest.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            child: const Icon(
-                              Icons.person_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
-                        ),
+                      child: const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                     itemBuilder: (context) => [
@@ -178,9 +171,11 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                                   ),
                                 ),
                                 alignment: Alignment.center,
-                                child: const Text(
-                                  'PI',
-                                  style: TextStyle(
+                                child: Text(
+                                  (AuthService.userName?.isNotEmpty ?? false)
+                                      ? AuthService.userName![0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 16,
@@ -188,22 +183,22 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Expanded(
+                              Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Pak Irwan',
-                                      style: TextStyle(
+                                      AuthService.userName ?? 'Pengguna',
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                         color: Color(0xFF1A1A2E),
                                         fontSize: 14.5,
                                       ),
                                     ),
-                                    SizedBox(height: 1),
+                                    const SizedBox(height: 1),
                                     Text(
-                                      'irwan.penyuluh@gmail.com',
+                                      AuthService.userEmail ?? 'email@tidak.ada',
                                       style: TextStyle(
                                         fontSize: 11.5,
                                         color: Colors.grey,
@@ -249,13 +244,16 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                         ),
                       ),
                     ],
-                    onSelected: (value) {
+                    onSelected: (value) async {
                       if (value == 1) {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (context) => const LoginScreen()),
-                          (route) => false,
-                        );
+                        await AuthService.logout();
+                        if (context.mounted) {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                            (route) => false,
+                          );
+                        }
                       }
                     },
                   ),
@@ -357,155 +355,143 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
     );
   }
 
-  Widget _buildListView(
-    BuildContext context, {
-    required bool includeWaiting,
-    required bool includeFinished,
-  }) {
-    final allReports = [
-      {
-        'title': 'Wereng Coklat',
-        'petaniName': 'Budi Santoso',
-        'location': 'Ds. Sukamaju',
-        'date': '12 Apr · 08:47',
-        'imageUrl': 'assets/images/gambartest.png',
-        'accuracy': '94%',
-        'status': 'Menunggu',
-        'isWaiting': true,
-      },
-      {
-        'title': 'Blas Padi',
-        'petaniName': 'Siti Aminah',
-        'location': 'Ds. Ciawi Lor',
-        'date': '12 Apr · 06:20',
-        'imageUrl': 'assets/images/gambartest.png',
-        'accuracy': '87%',
-        'status': 'Selesai',
-        'isWaiting': false,
-      },
-      {
-        'title': 'Ulat Grayak',
-        'petaniName': 'Hendra W.',
-        'location': 'Ds. Rawa Gede',
-        'date': '11 Apr · 19:10',
-        'imageUrl': 'assets/images/gambartest.png',
-        'accuracy': '91%',
-        'status': 'Selesai',
-        'isWaiting': false,
-      },
-    ];
+  Widget _buildListView(Future<PenyuluhReportResponse> future, String title) {
+    return FutureBuilder<PenyuluhReportResponse>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF7B1FA2)),
+          );
+        }
 
-    final filtered = allReports.where((r) {
-      final isW = r['isWaiting'] as bool;
-      if (isW && !includeWaiting) return false;
-      if (!isW && !includeFinished) return false;
-      
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final title = (r['title'] as String).toLowerCase();
-        final name = (r['petaniName'] as String).toLowerCase();
-        final loc = (r['location'] as String).toLowerCase();
-        return title.contains(query) || name.contains(query) || loc.contains(query);
-      }
-      return true;
-    }).toList();
-
-    final String title = includeWaiting && includeFinished
-        ? 'Semua Laporan'
-        : includeWaiting
-            ? 'Laporan Menunggu'
-            : 'Laporan Selesai';
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16, left: 4, right: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF4A148C),
-                  letterSpacing: -0.3,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4A148C).withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${filtered.length} Laporan',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF4A148C),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (filtered.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              child: Column(
-                children: [
-                  Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Tidak ada laporan ditemukan',
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline_rounded, size: 60, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                Text('Error: ${snapshot.error}', style: TextStyle(color: Colors.grey.shade600)),
+              ],
             ),
-          )
-        else
-          ...filtered.map((r) {
+          );
+        }
+
+        final response = snapshot.data;
+        if (response == null || !response.success) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.inbox_rounded, size: 60, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                Text(
+                  response?.message ?? 'Gagal memuat data',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final items = response.data;
+        final filtered = items.where((item) {
+          if (_searchQuery.isNotEmpty) {
+            final query = _searchQuery.toLowerCase();
+            final pestName = item.pestName.toLowerCase();
+            final petaniName = item.petaniName.toLowerCase();
+            final location = item.villageName.toLowerCase();
+            return pestName.contains(query) || petaniName.contains(query) || location.contains(query);
+          }
+          return true;
+        }).toList();
+
+        if (filtered.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.assignment_outlined, size: 64, color: Colors.grey.shade300),
+                const SizedBox(height: 12),
+                Text(
+                  'Tidak ada laporan',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          itemCount: filtered.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16, left: 4, right: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF4A148C),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A148C).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${filtered.length} Laporan',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF4A148C),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: _buildReportCard(
-                title: r['title'] as String,
-                petaniName: r['petaniName'] as String,
-                location: r['location'] as String,
-                date: r['date'] as String,
-                imageUrl: r['imageUrl'] as String,
-                accuracy: r['accuracy'] as String,
-                status: r['status'] as String,
-                isWaiting: r['isWaiting'] as bool,
-              ),
+              child: _buildReportCard(context, filtered[index - 1]),
             );
-          }),
-        const SizedBox(height: 20),
-      ],
+          },
+        );
+      },
     );
   }
 
-  Widget _buildReportCard({
-    required String title,
-    required String petaniName,
-    required String location,
-    required String date,
-    required String imageUrl,
-    required String accuracy,
-    required String status,
-    required bool isWaiting,
-  }) {
+  Widget _buildReportCard(BuildContext context, PenyuluhReportItem item) {
+    bool isWaiting = item.status == 'pending';
+    String statusText = isWaiting ? 'Menunggu' : 'Selesai';
+    
+    double confDouble = double.tryParse(item.confidence) ?? 0.0;
+    String accuracy = '${(confDouble * 100).toStringAsFixed(0)}%';
+
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final result = await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => LaporanDetailPenyuluhScreen(isWaiting: isWaiting),
+            builder: (context) => LaporanDetailPenyuluhScreen(
+              detectionId: item.id,
+              isWaiting: isWaiting,
+            ),
           ),
         );
+        if (result == true) {
+          setState(() {});
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -528,16 +514,16 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      imageUrl,
+                    child: Image.network(
+                      '${PenyuluhService.baseUrl}/api/image/${item.imagePath}',
                       width: 70,
                       height: 70,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => Container(
                         width: 70,
                         height: 70,
-                        color: Colors.grey.shade200,
-                        child: const Icon(Icons.image, color: Colors.grey),
+                        color: Colors.grey.shade100,
+                        child: Icon(Icons.bug_report, color: Colors.grey.shade400, size: 32),
                       ),
                     ),
                   ),
@@ -552,7 +538,7 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                           children: [
                             Expanded(
                               child: Text(
-                                title,
+                                item.pestName,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
@@ -567,7 +553,7 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                status,
+                                statusText,
                                 style: TextStyle(
                                   color: isWaiting ? const Color(0xFFE65100) : const Color(0xFF2E7D32),
                                   fontSize: 11,
@@ -579,7 +565,7 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          petaniName,
+                          item.petaniName,
                           style: TextStyle(
                             color: Colors.grey.shade600,
                             fontSize: 13,
@@ -592,15 +578,18 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                             Icon(Icons.location_on_outlined, size: 14, color: Colors.grey.shade400),
                             const SizedBox(width: 4),
                             Text(
-                              location,
+                              item.villageName,
                               style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
                             ),
                             const SizedBox(width: 12),
                             Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade400),
                             const SizedBox(width: 4),
-                            Text(
-                              date,
-                              style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                            Expanded(
+                              child: Text(
+                                item.detectedAt,
+                                style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),
@@ -652,7 +641,7 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                     ],
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF7B1FA2),
                       borderRadius: BorderRadius.circular(12),

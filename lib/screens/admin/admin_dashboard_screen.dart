@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/admin/laporan_admin_view.dart';
 import 'package:fe_photobug/screens/admin/pengguna_admin_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/services/admin_service.dart';
+import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -13,6 +15,33 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _currentIndex = 0;
+  bool _isLoading = true;
+  AdminDashboardData? _dashboardStats;
+  VillagesReportData? _villagesReport;
+  PestStatisticsData? _pestStats;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final results = await Future.wait([
+      AdminService.getDashboardStats(),
+      AdminService.getVillagesReport(),
+      AdminService.getPestStatistics(),
+    ]);
+    
+    if (mounted) {
+      setState(() {
+        _dashboardStats = results[0] as AdminDashboardData?;
+        _villagesReport = results[1] as VillagesReportData?;
+        _pestStats = results[2] as PestStatisticsData?;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +65,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // TAB 0 — DASBOR UTAMA
   // =========================================================
   Widget _buildDasborView(double topPadding) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF7B1FA2)));
+    }
+    
     return Column(
       children: [
         // ---- PURPLE GRADIENT HEADER ----
@@ -310,33 +343,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                     childAspectRatio: 1.55,
-                    children: const [
+                    children: [
                       _StatCard(
                         icon: Icons.description_rounded,
                         label: 'Total Laporan',
-                        value: '248',
-                        trend: '+12%',
+                        value: _dashboardStats?.totalReports.toString() ?? '0',
+                        trend: '',
                         isPositive: true,
                       ),
                       _StatCard(
                         icon: Icons.people_alt_rounded,
                         label: 'Pengguna Aktif',
-                        value: '1,284',
-                        trend: '+8%',
+                        value: '${_dashboardStats?.activeUsers ?? 0}',
+                        trend: '',
                         isPositive: true,
                       ),
                       _StatCard(
                         icon: Icons.schedule_rounded,
                         label: 'Pending Review',
-                        value: '34',
-                        trend: '+5',
+                        value: _dashboardStats?.pendingReview.toString() ?? '0',
+                        trend: '',
                         isPositive: false,
                       ),
                       _StatCard(
                         icon: Icons.check_circle_rounded,
                         label: 'Diselesaikan',
-                        value: '198',
-                        trend: '+18%',
+                        value: _dashboardStats?.completed.toString() ?? '0',
+                        trend: '',
                         isPositive: true,
                       ),
                     ],
@@ -401,39 +434,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ],
                   ),
                   child: Column(
-                    children: [
-                      _DesaItem(
-                        nama: 'Ds. Sukamaju',
-                        jumlahLaporan: 12,
-                        totalHama: 47,
-                        progress: 0.90,
-                        color: const Color(0xFF7B1FA2),
-                      ),
-                      const SizedBox(height: 18),
-                      _DesaItem(
-                        nama: 'Ds. Ciawi Lor',
-                        jumlahLaporan: 8,
-                        totalHama: 31,
-                        progress: 0.70,
-                        color: const Color(0xFF9C27B0),
-                      ),
-                      const SizedBox(height: 18),
-                      _DesaItem(
-                        nama: 'Ds. Rawa Gede',
-                        jumlahLaporan: 5,
-                        totalHama: 18,
-                        progress: 0.55,
-                        color: const Color(0xFFAB47BC),
-                      ),
-                      const SizedBox(height: 18),
-                      _DesaItem(
-                        nama: 'Ds. Sindangjaya',
-                        jumlahLaporan: 0,
-                        totalHama: 0,
-                        progress: 0.15,
-                        color: const Color(0xFFCE93D8),
-                      ),
-                    ],
+                    children: _villagesReport?.data.map((desa) {
+                          final colors = [
+                            const Color(0xFF7B1FA2),
+                            const Color(0xFF9C27B0),
+                            const Color(0xFFAB47BC),
+                            const Color(0xFFCE93D8),
+                          ];
+                          final index = _villagesReport!.data.indexOf(desa);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 18),
+                            child: _DesaItem(
+                              nama: desa.villageName,
+                              jumlahLaporan: desa.totalReports,
+                              totalHama: desa.totalPestsDetected,
+                              progress: (desa.totalReports > 0 ? (desa.totalReports / 20).clamp(0.0, 1.0) : 0.0).toDouble(),
+                              color: colors[index % colors.length],
+                            ),
+                          );
+                        }).toList() ??
+                        [const Text('Tidak ada data desa binaan')],
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -512,6 +532,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // ==================== CHART: DISTRIBUSI JENIS HAMA ====================
   Widget _buildDistribusiHamaChart() {
+    final werengCoklat = _pestStats?.summary['wereng_coklat']?.toDouble() ?? 0.0;
+    final werengHijau = _pestStats?.summary['wereng_hijau']?.toDouble() ?? 0.0;
+    final total = werengCoklat + werengHijau;
+    final coklatPct = total > 0 ? ((werengCoklat / total) * 100).toInt() : 0;
+    final hijauPct = total > 0 ? ((werengHijau / total) * 100).toInt() : 0;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -546,26 +572,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 flex: 4,
                 child: SizedBox(
                   height: 120,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 0,
-                      centerSpaceRadius: 35,
-                      sections: [
-                        PieChartSectionData(
-                          color: const Color(0xFF1B5E20),
-                          value: 65,
-                          title: '',
-                          radius: 18,
+                  child: total == 0
+                      ? const Center(child: Text('Belum ada data', style: TextStyle(fontSize: 12, color: Colors.grey)))
+                      : PieChart(
+                          PieChartData(
+                            sectionsSpace: 0,
+                            centerSpaceRadius: 35,
+                            sections: [
+                              if (werengCoklat > 0)
+                                PieChartSectionData(
+                                  color: const Color(0xFF1B5E20),
+                                  value: werengCoklat,
+                                  title: '',
+                                  radius: 18,
+                                ),
+                              if (werengHijau > 0)
+                                PieChartSectionData(
+                                  color: const Color(0xFF00BFA5),
+                                  value: werengHijau,
+                                  title: '',
+                                  radius: 18,
+                                ),
+                            ],
+                          ),
                         ),
-                        PieChartSectionData(
-                          color: const Color(0xFF00BFA5),
-                          value: 35,
-                          title: '',
-                          radius: 18,
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               ),
               const SizedBox(width: 20),
@@ -575,9 +605,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 flex: 5,
                 child: Column(
                   children: [
-                    _buildPieLegendRow('Wereng Coklat', '65%', const Color(0xFF1B5E20)),
+                    _buildPieLegendRow('Wereng Coklat', '${werengCoklat.toInt()}', const Color(0xFF1B5E20)),
                     const SizedBox(height: 12),
-                    _buildPieLegendRow('Wereng Hijau', '35%', const Color(0xFF00BFA5)),
+                    _buildPieLegendRow('Wereng Hijau', '${werengHijau.toInt()}', const Color(0xFF00BFA5)),
                   ],
                 ),
               )
@@ -919,27 +949,30 @@ class _DesaItem extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 8,
-            backgroundColor: color.withValues(alpha: 0.12),
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-          ),
-        ),
-        const SizedBox(height: 5),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            '$percent%',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: color,
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 8,
+                  backgroundColor: color.withValues(alpha: 0.12),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Text(
+              '$percent%',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
         ),
       ],
     );

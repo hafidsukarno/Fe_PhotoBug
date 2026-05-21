@@ -1,11 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/penyuluh/laporan_detail_penyuluh_screen.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/services/penyuluh_service.dart';
 
-class NotifikasiPenyuluhView extends StatelessWidget {
+class NotifikasiPenyuluhView extends StatefulWidget {
   final double topPadding;
 
   const NotifikasiPenyuluhView({super.key, required this.topPadding});
+
+  @override
+  State<NotifikasiPenyuluhView> createState() => _NotifikasiPenyuluhViewState();
+}
+
+class _NotifikasiPenyuluhViewState extends State<NotifikasiPenyuluhView> {
+  bool _isLoading = true;
+  List<NotificationItem> _notifications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    final response = await PenyuluhService.getNotifications();
+    if (mounted) {
+      setState(() {
+        _notifications = response.data;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,58 +39,36 @@ class NotifikasiPenyuluhView extends StatelessWidget {
       children: [
         _buildHeader(context),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.only(top: 10, bottom: 30),
-            children: [
-              _buildSectionTitle('HARI INI'),
-              _buildNotificationCard(
-                context,
-                icon: Icons.notifications_none_rounded,
-                iconColor: const Color(0xFF7B1FA2),
-                iconBgColor: const Color(0xFFF3E5F5),
-                title: 'Laporan Baru Masuk',
-                time: '08:47',
-                description: 'Budi Santoso (Ds. Sukamaju) melaporkan Wereng Coklat dengan AI 94%',
-                isUnread: true,
-                showAction: true,
-              ),
-              _buildNotificationCard(
-                context,
-                icon: Icons.notifications_none_rounded,
-                iconColor: const Color(0xFF7B1FA2),
-                iconBgColor: const Color(0xFFF3E5F5),
-                title: 'Laporan Baru Masuk',
-                time: '06:20',
-                description: 'Siti Aminah (Ds. Ciawi Lor) melaporkan Blas Padi dengan AI 87%',
-                isUnread: true,
-                showAction: true,
-              ),
-              _buildNotificationCard(
-                context,
-                icon: Icons.warning_amber_rounded,
-                iconColor: const Color(0xFFF57C00),
-                iconBgColor: const Color(0xFFFFF3E0),
-                title: 'Peringatan Cuaca',
-                time: '05:00',
-                description: 'Prakiraan hujan deras selama 3 hari ke depan — waspadai peningkatan hama',
-                isUnread: true,
-                showAction: false,
-              ),
-              const SizedBox(height: 10),
-              _buildSectionTitle('KEMARIN'),
-              _buildNotificationCard(
-                context,
-                icon: Icons.check_circle_outline_rounded,
-                iconColor: const Color(0xFF2E7D32),
-                iconBgColor: const Color(0xFFE8F5E9),
-                title: 'Rekomendasi Diterima',
-                time: '19:10',
-                description: 'Hendra W. telah membaca rekomendasi Anda untuk laporan RPT-047',
-                isUnread: false,
-                showAction: false,
-              ),
-            ],
-          ),
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF7B1FA2)))
+              : _notifications.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Belum ada notifikasi.',
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(top: 10, bottom: 30),
+                      itemCount: _notifications.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) return _buildSectionTitle('NOTIFIKASI TERBARU');
+                        
+                        final notif = _notifications[index - 1];
+                        return _buildNotificationCard(
+                          context,
+                          icon: Icons.notifications_none_rounded,
+                          iconColor: const Color(0xFF7B1FA2),
+                          iconBgColor: const Color(0xFFF3E5F5),
+                          title: 'Laporan Baru Masuk',
+                          time: notif.timestampAgo,
+                          description: '${notif.petaniName} (Ds. ${notif.villageName}) melaporkan ${notif.detectedPest} dengan AI ${notif.aiConfidence}',
+                          isUnread: true,
+                          showAction: notif.detectionId != null,
+                          detectionId: notif.detectionId ?? 0,
+                        );
+                      },
+                    ),
         ),
       ],
     );
@@ -73,7 +77,7 @@ class NotifikasiPenyuluhView extends StatelessWidget {
   Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(22, topPadding + 16, 22, 24),
+      padding: EdgeInsets.fromLTRB(22, widget.topPadding + 16, 22, 24),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -174,19 +178,10 @@ class NotifikasiPenyuluhView extends StatelessWidget {
                           width: 1.5,
                         ),
                       ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/gambartest.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            child: const Icon(
-                              Icons.person_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
-                        ),
+                      child: const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                     itemBuilder: (context) => [
@@ -206,9 +201,11 @@ class NotifikasiPenyuluhView extends StatelessWidget {
                                   ),
                                 ),
                                 alignment: Alignment.center,
-                                child: const Text(
-                                  'PI',
-                                  style: TextStyle(
+                                child: Text(
+                                  (AuthService.userName?.isNotEmpty ?? false)
+                                      ? AuthService.userName![0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 16,
@@ -216,22 +213,22 @@ class NotifikasiPenyuluhView extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Expanded(
+                              Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Pak Irwan',
-                                      style: TextStyle(
+                                      AuthService.userName ?? 'Pengguna',
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                         color: Color(0xFF1A1A2E),
                                         fontSize: 14.5,
                                       ),
                                     ),
-                                    SizedBox(height: 1),
+                                    const SizedBox(height: 1),
                                     Text(
-                                      'irwan.penyuluh@gmail.com',
+                                      AuthService.userEmail ?? 'email@tidak.ada',
                                       style: TextStyle(
                                         fontSize: 11.5,
                                         color: Colors.grey,
@@ -277,13 +274,16 @@ class NotifikasiPenyuluhView extends StatelessWidget {
                         ),
                       ),
                     ],
-                    onSelected: (value) {
+                    onSelected: (value) async {
                       if (value == 1) {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (context) => const LoginScreen()),
-                          (route) => false,
-                        );
+                        await AuthService.logout();
+                        if (context.mounted) {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                            (route) => false,
+                          );
+                        }
                       }
                     },
                   ),
@@ -330,6 +330,7 @@ class NotifikasiPenyuluhView extends StatelessWidget {
     required String description,
     required bool isUnread,
     bool showAction = false,
+    int detectionId = 1,
   }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -424,7 +425,10 @@ class NotifikasiPenyuluhView extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const LaporanDetailPenyuluhScreen(isWaiting: true),
+                          builder: (context) => LaporanDetailPenyuluhScreen(
+                            detectionId: detectionId,
+                            isWaiting: true,
+                          ),
                         ),
                       );
                     },
