@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/services/detection_service.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 
 class LaporanHasilScreen extends StatelessWidget {
   final Detection detection;
@@ -130,19 +131,10 @@ class LaporanHasilScreen extends StatelessWidget {
                             width: 1.5,
                           ),
                         ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/images/gambartest.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              child: const Icon(
-                                Icons.person_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                          ),
+                        child: const Icon(
+                          Icons.person_rounded,
+                          color: Colors.white,
+                          size: 24,
                         ),
                       ),
                       itemBuilder: (context) => [
@@ -224,19 +216,9 @@ class LaporanHasilScreen extends StatelessWidget {
                           ),
                         ),
                       ],
-                      onSelected: (value) async {
+                      onSelected: (value) {
                         if (value == 1) {
-                          // Call logout API
-                          await AuthService.logout();
-                          
-                          // Navigate to login
-                          if (context.mounted) {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (context) => const LoginScreen()),
-                              (route) => false,
-                            );
-                          }
+                          DialogUtils.showLogoutConfirmation(context);
                         }
                       },
                     ),

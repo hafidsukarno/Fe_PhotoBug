@@ -86,13 +86,18 @@ class RegisterService {
         );
       } else if (response.statusCode == 422) {
         final data = jsonDecode(response.body);
-        final errors = data['errors'] as Map<String, dynamic>?;
-        String errorMsg = 'Validasi gagal: ';
+        String errorMsg = data['message'] ?? 'Validasi gagal';
         
-        if (errors != null) {
-          errorMsg += errors.values.first is List
-              ? errors.values.first[0]
-              : errors.values.first;
+        if (data['errors'] != null) {
+          final errors = data['errors'] as Map<String, dynamic>;
+          if (errors.isNotEmpty) {
+            final firstError = errors.values.first;
+            if (firstError is List && firstError.isNotEmpty) {
+              errorMsg = firstError.first.toString();
+            } else {
+              errorMsg = firstError.toString();
+            }
+          }
         }
         
         return RegisterResponse(
@@ -100,10 +105,17 @@ class RegisterService {
           message: errorMsg,
         );
       } else {
-        final data = jsonDecode(response.body);
+        String errorMsg = 'Registrasi gagal (${response.statusCode})';
+        try {
+          final data = jsonDecode(response.body);
+          if (data['message'] != null) {
+            errorMsg = data['message'];
+          }
+        } catch (_) {}
+
         return RegisterResponse(
           success: false,
-          message: data['message'] ?? 'Registrasi gagal (${response.statusCode})',
+          message: errorMsg,
         );
       }
     } catch (e) {

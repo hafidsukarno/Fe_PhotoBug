@@ -160,19 +160,10 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
                           width: 2,
                         ),
                       ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/gambartest.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            child: const Icon(
-                              Icons.person_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
-                        ),
+                      child: const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                   ],

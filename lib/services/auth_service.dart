@@ -73,16 +73,38 @@ class AuthService {
           user: user,
           role: roleName, // Gunakan role name yang sudah di-map
         );
-      } else if (response.statusCode == 401) {
+      } else if (response.statusCode == 401 || response.statusCode == 422) {
         final data = jsonDecode(response.body);
+        String errorMessage = data['message'] ?? 'Username atau password salah';
+        
+        if (data['errors'] != null) {
+          final errors = data['errors'] as Map<String, dynamic>;
+          if (errors.isNotEmpty) {
+            final firstError = errors.values.first;
+            if (firstError is List && firstError.isNotEmpty) {
+              errorMessage = firstError.first.toString();
+            } else {
+              errorMessage = firstError.toString();
+            }
+          }
+        }
+
         return LoginResponse(
           success: false,
-          message: data['message'] ?? 'Username atau password salah',
+          message: errorMessage,
         );
       } else {
+        String errorMsg = 'Terjadi kesalahan server (${response.statusCode})';
+        try {
+          final data = jsonDecode(response.body);
+          if (data['message'] != null) {
+            errorMsg = data['message'];
+          }
+        } catch (_) {}
+
         return LoginResponse(
           success: false,
-          message: 'Terjadi kesalahan server (${response.statusCode})',
+          message: errorMsg,
         );
       }
     } catch (e) {
@@ -134,6 +156,15 @@ class AuthService {
   // Logout and call API endpoint
   static Future<bool> logout() async {
     try {
+      if (_authToken == null) {
+        // Token sudah kosong (misal karena hot restart), langsung bersihkan state
+        _userName = null;
+        _userEmail = null;
+        _userId = null;
+        _userVillage = null;
+        return true;
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/logout'),
         headers: {

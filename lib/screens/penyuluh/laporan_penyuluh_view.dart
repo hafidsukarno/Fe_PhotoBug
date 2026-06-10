@@ -3,11 +3,17 @@ import 'package:fe_photobug/screens/penyuluh/laporan_detail_penyuluh_screen.dart
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/penyuluh_service.dart';
 import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 
 class LaporanPenyuluhView extends StatefulWidget {
   final double topPadding;
+  final int initialTabIndex;
 
-  const LaporanPenyuluhView({super.key, required this.topPadding});
+  const LaporanPenyuluhView({
+    super.key, 
+    required this.topPadding,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<LaporanPenyuluhView> createState() => _LaporanPenyuluhViewState();
@@ -27,6 +33,7 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 3,
+      initialIndex: widget.initialTabIndex,
       child: Column(
         children: [
           _buildHeader(),
@@ -244,16 +251,9 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                         ),
                       ),
                     ],
-                    onSelected: (value) async {
+                    onSelected: (value) {
                       if (value == 1) {
-                        await AuthService.logout();
-                        if (context.mounted) {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LoginScreen()),
-                            (route) => false,
-                          );
-                        }
+                        DialogUtils.showLogoutConfirmation(context);
                       }
                     },
                   ),

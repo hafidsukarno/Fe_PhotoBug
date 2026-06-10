@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../services/admin_service.dart';
+import '../../services/auth_service.dart';
+import '../../utils/dialog_utils.dart';
 
 class PenggunaAdminView extends StatefulWidget {
   final double topPadding;
@@ -10,41 +13,50 @@ class PenggunaAdminView extends StatefulWidget {
 }
 
 class _PenggunaAdminViewState extends State<PenggunaAdminView> {
-  // 0 = Desa, 1 = Penyuluh
-  int _selectedTab = 0;
+  @override
+  void initState() {
+    super.initState();
+    _fetchDesaForPenyuluh();
+    _fetchPenyuluh();
+  }
 
-  // Data Dummy Desa
-  final List<Map<String, dynamic>> _desaList = [
-    {'id': 1, 'nama': 'Ds. Sukamaju', 'kec': 'Kec. Ciawi', 'kab': 'Kab. Bogor'},
-    {'id': 2, 'nama': 'Ds. Ciawi Lor', 'kec': 'Kec. Ciawi', 'kab': 'Kab. Bogor'},
-    {'id': 3, 'nama': 'Ds. Rawa Gede', 'kec': 'Kec. Ciawi', 'kab': 'Kab. Bogor'},
-    {'id': 4, 'nama': 'Ds. Sindangjaya', 'kec': 'Kec. Ciawi', 'kab': 'Kab. Bogor'},
-  ];
+  // We need to fetch desa list just for assigning to Penyuluh in the bottom sheet.
+  List<Village> _desaList = [];
+  Map<String, String> _desaStatusMap = {};
+  Future<void> _fetchDesaForPenyuluh() async {
+    final villages = await AdminService.getVillages();
+    final statusMap = await AdminService.getVillagesStatus();
+    if (mounted) {
+      setState(() {
+        _desaList = villages;
+        _desaStatusMap = statusMap;
+      });
+    }
+  }
 
-  // Data Dummy Penyuluh
-  final List<Map<String, dynamic>> _penyuluhList = [
-    {
-      'id': 1,
-      'nama': 'Pak Irwan',
-      'email': 'irwan.penyuluh@gmail.com',
-      'phone': '081234567890',
-      'desa_binaan': ['Ds. Sukamaju', 'Ds. Ciawi Lor'],
-    },
-    {
-      'id': 2,
-      'nama': 'Bu Sari',
-      'email': 'sari.agri@gmail.com',
-      'phone': '081298765432',
-      'desa_binaan': ['Ds. Rawa Gede'],
-    },
-    {
-      'id': 3,
-      'nama': 'Pak Dedi',
-      'email': 'dedi.tani@gmail.com',
-      'phone': '085512341234',
-      'desa_binaan': ['Ds. Sindangjaya'],
-    },
-  ];
+  @override
+  void dispose() {
+    _penyuluhNameCtrl.dispose();
+    _penyuluhUsernameCtrl.dispose();
+    _penyuluhEmailCtrl.dispose();
+    _penyuluhPhoneCtrl.dispose();
+    _penyuluhPasswordCtrl.dispose();
+    super.dispose();
+  }
+
+  List<PenyuluhItem> _penyuluhList = [];
+  bool _isLoadingPenyuluh = true;
+
+  Future<void> _fetchPenyuluh() async {
+    setState(() => _isLoadingPenyuluh = true);
+    final penyuluh = await AdminService.getPenyuluhList();
+    if (mounted) {
+      setState(() {
+        _penyuluhList = penyuluh;
+        _isLoadingPenyuluh = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,10 +64,7 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
       children: [
         _buildHeader(),
         Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: _selectedTab == 0 ? _buildTabDesa() : _buildTabPenyuluh(),
-          ),
+          child: _buildTabPenyuluh(),
         ),
       ],
     );
@@ -87,233 +96,170 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Manajemen Pengguna',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Kelola data desa dan akun penyuluh lapangan',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.8),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Custom Tab Toggle
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectedTab = 0),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _selectedTab == 0
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: _selectedTab == 0
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                )
-                              ]
-                            : [],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Manajemen Pengguna',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
                       ),
-                      child: Center(
-                        child: Text(
-                          'Desa',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: _selectedTab == 0
-                                ? const Color(0xFF4A148C)
-                                : Colors.white,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Kelola data desa dan akun penyuluh lapangan',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<int>(
+                position: PopupMenuPosition.under,
+                offset: const Offset(0, 12),
+                elevation: 16,
+                shadowColor: const Color(0xFF4A148C).withValues(alpha: 0.16),
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    enabled: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF4A148C), Color(0xFF9C27B0)],
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              (AuthService.userName ?? 'A').substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  AuthService.userName ?? 'Super Admin',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1A1A2E),
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  AuthService.userEmail ?? 'admin@photobug.id',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: Colors.grey.shade500,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectedTab = 1),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _selectedTab == 1
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: _selectedTab == 1
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                )
-                              ]
-                            : [],
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Penyuluh',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: _selectedTab == 1
-                                ? const Color(0xFF4A148C)
-                                : Colors.white,
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.logout_rounded,
+                              color: Colors.red.shade700,
+                              size: 18,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Keluar Akun',
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+                onSelected: (value) {
+                  if (value == 1) {
+                    DialogUtils.showLogoutConfirmation(context);
+                  }
+                },
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ==================== TAB 0: DESA ====================
-  Widget _buildTabDesa() {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        // Button Tambah Desa
-        GestureDetector(
-          onTap: _showAddDesaSheet,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF7B1FA2).withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFF7B1FA2).withValues(alpha: 0.3),
-                style: BorderStyle.solid,
-                width: 1.5,
-              ),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add_rounded, color: Color(0xFF7B1FA2)),
-                SizedBox(width: 8),
-                Text(
-                  'Tambah Desa Baru',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF7B1FA2),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
 
-        Text(
-          'Daftar Desa (${_desaList.length})',
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF1A1A2E),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // List Item Desa
-        ..._desaList.map((desa) {
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF7B1FA2).withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.location_on_rounded,
-                      color: Color(0xFF7B1FA2), size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        desa['nama'],
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1A1A2E),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${desa['kec']}, ${desa['kab']}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Tombol Delete
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  color: Colors.red.shade400,
-                  onPressed: () {
-                    // TODO: Connect to delete API
-                  },
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
 
   // ==================== TAB 1: PENYULUH ====================
   Widget _buildTabPenyuluh() {
+    if (_isLoadingPenyuluh) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF7B1FA2)));
+    }
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -363,7 +309,7 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
 
         // List Item Penyuluh
         ..._penyuluhList.map((penyuluh) {
-          final List<String> binaan = penyuluh['desa_binaan'];
+          final List<String> binaan = penyuluh.managedVillages;
           return Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(16),
@@ -398,7 +344,7 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            penyuluh['nama'],
+                            penyuluh.name,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
@@ -407,7 +353,7 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            penyuluh['phone'],
+                            penyuluh.noHp ?? 'No. HP belum diatur',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey.shade500,
@@ -420,14 +366,18 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                     IconButton(
                       icon: const Icon(Icons.edit_rounded, size: 20),
                       color: Colors.grey.shade400,
-                      onPressed: () {
-                        // TODO: Open edit form
-                      },
+                      onPressed: () => _showAddPenyuluhSheet(penyuluhToEdit: penyuluh),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline_rounded, size: 20),
                       color: Colors.red.shade400,
-                      onPressed: () {},
+                      onPressed: () {
+                        _showDeleteConfirmation(
+                          title: 'Hapus Penyuluh',
+                          content: 'Apakah Anda yakin ingin menghapus penyuluh ${penyuluh.name}? Aksi ini tidak dapat dibatalkan.',
+                          onConfirm: () => _deletePenyuluh(penyuluh.id),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -462,88 +412,79 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
 
   // ==================== BOTTOM SHEETS (FORMS) ====================
 
-  void _showAddDesaSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(32),
-            topRight: Radius.circular(32),
-          ),
-        ),
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Tambah Desa Baru',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF1A1A2E),
-              ),
-            ),
-            const SizedBox(height: 24),
-            _buildTextField('Nama Desa', 'Masukkan nama desa (mis. Ds. Sukamaju)'),
-            const SizedBox(height: 16),
-            _buildTextField('Kecamatan', 'Masukkan kecamatan'),
-            const SizedBox(height: 16),
-            _buildTextField('Kabupaten', 'Masukkan kabupaten'),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7B1FA2),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'Simpan Desa',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+  final TextEditingController _penyuluhNameCtrl = TextEditingController();
+  final TextEditingController _penyuluhUsernameCtrl = TextEditingController();
+  final TextEditingController _penyuluhEmailCtrl = TextEditingController();
+  final TextEditingController _penyuluhPhoneCtrl = TextEditingController();
+  final TextEditingController _penyuluhPasswordCtrl = TextEditingController();
+
+  void _showSnackBar(String message, {bool isSuccess = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isSuccess ? Colors.green.shade600 : Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
 
-  void _showAddPenyuluhSheet() {
-    // Simulasi state checkbox lokal di dalam bottom sheet
-    final Map<String, bool> selectedDesa = {
-      for (var d in _desaList) d['nama']: false
+  void _showDeleteConfirmation({
+    required String title,
+    required String content,
+    required VoidCallback onConfirm,
+    String confirmText = 'Hapus',
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onConfirm();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(confirmText, style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Future<void> _deletePenyuluh(int id) async {
+    final errorMessage = await AdminService.deletePenyuluh(id);
+    if (errorMessage == null) {
+      _showSnackBar('Penyuluh berhasil dihapus', isSuccess: true);
+      _fetchPenyuluh();
+      _fetchDesaForPenyuluh();
+    } else {
+      _showSnackBar(errorMessage, isSuccess: false);
+    }
+  }
+
+  void _showAddPenyuluhSheet({PenyuluhItem? penyuluhToEdit}) {
+    _penyuluhNameCtrl.text = penyuluhToEdit?.name ?? '';
+    _penyuluhUsernameCtrl.text = penyuluhToEdit?.username ?? '';
+    _penyuluhEmailCtrl.text = penyuluhToEdit?.email ?? '';
+    _penyuluhPhoneCtrl.text = penyuluhToEdit?.noHp ?? '';
+    _penyuluhPasswordCtrl.text = ''; // Password selalu kosong
+
+    final Map<int, bool> selectedDesa = {
+      for (var d in _desaList) d.id: penyuluhToEdit?.managedVillages.contains(d.villageName) ?? false
     };
 
     showModalBottomSheet(
@@ -581,9 +522,9 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Tambah Penyuluh Baru',
-                  style: TextStyle(
+                Text(
+                  penyuluhToEdit == null ? 'Tambah Penyuluh Baru' : 'Edit Penyuluh',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF1A1A2E),
@@ -595,13 +536,17 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                     children: [
                       const Text('INFORMASI AKUN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey)),
                       const SizedBox(height: 12),
-                      _buildTextField('Nama Lengkap', 'Masukkan nama penyuluh'),
+                      _buildTextField('Nama Lengkap', 'Masukkan nama penyuluh', controller: _penyuluhNameCtrl),
                       const SizedBox(height: 16),
-                      _buildTextField('Email', 'Masukkan email'),
+                      _buildTextField('Username', 'Masukkan username', controller: _penyuluhUsernameCtrl),
                       const SizedBox(height: 16),
-                      _buildTextField('No Handphone', 'Masukkan no hp'),
+                      _buildTextField('Email', 'Masukkan email', controller: _penyuluhEmailCtrl),
                       const SizedBox(height: 16),
-                      _buildTextField('Password', 'Masukkan password sementara', isPassword: true),
+                      _buildTextField('No Handphone', 'Masukkan no hp', controller: _penyuluhPhoneCtrl),
+                      if (penyuluhToEdit == null) ...[
+                        const SizedBox(height: 16),
+                        _buildTextField('Password', 'Masukkan password sementara', isPassword: true, controller: _penyuluhPasswordCtrl),
+                      ],
                       const SizedBox(height: 24),
 
                       // Bagian Desa Binaan
@@ -613,18 +558,27 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Column(
-                          children: selectedDesa.keys.map((desaNama) {
+                          children: _desaList.map((desa) {
+                            final status = _desaStatusMap[desa.villageName] ?? 'kosong';
+                            // Kalau edit dan desa ini milik dia, jangan di-disable
+                            final isOwner = penyuluhToEdit != null && penyuluhToEdit.managedVillages.contains(desa.villageName);
+                            final isTerisi = status == 'terisi' && !isOwner;
+
                             return CheckboxListTile(
                               title: Text(
-                                desaNama,
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                isTerisi ? '${desa.villageName} (Sudah Terisi)' : desa.villageName,
+                                style: TextStyle(
+                                  fontSize: 14, 
+                                  fontWeight: FontWeight.w600,
+                                  color: isTerisi ? Colors.grey : const Color(0xFF1A1A2E),
+                                ),
                               ),
-                              value: selectedDesa[desaNama],
+                              value: selectedDesa[desa.id],
                               activeColor: const Color(0xFF7B1FA2),
                               checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              onChanged: (bool? value) {
+                              onChanged: isTerisi ? null : (bool? value) {
                                 setSheetState(() {
-                                  selectedDesa[desaNama] = value ?? false;
+                                  selectedDesa[desa.id] = value ?? false;
                                 });
                               },
                             );
@@ -639,7 +593,57 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () async {
+                      final name = _penyuluhNameCtrl.text;
+                      final username = _penyuluhUsernameCtrl.text;
+                      final email = _penyuluhEmailCtrl.text;
+                      final phone = _penyuluhPhoneCtrl.text;
+                      final password = _penyuluhPasswordCtrl.text;
+                      
+                      final villages = selectedDesa.entries
+                          .where((e) => e.value)
+                          .map((e) => e.key)
+                          .toList();
+
+                      if (penyuluhToEdit == null && (name.isEmpty || username.isEmpty || email.isEmpty || password.isEmpty)) {
+                        _showSnackBar('Harap lengkapi field yang wajib (Nama, Username, Email, Password)', isSuccess: false);
+                        return;
+                      } else if (penyuluhToEdit != null && (name.isEmpty || username.isEmpty || email.isEmpty)) {
+                        _showSnackBar('Harap lengkapi field yang wajib (Nama, Username, Email)', isSuccess: false);
+                        return;
+                      }
+
+                      String? errorMessage;
+                      if (penyuluhToEdit == null) {
+                        errorMessage = await AdminService.createPenyuluh(
+                          name: name,
+                          username: username,
+                          email: email,
+                          password: password,
+                          noHp: phone,
+                          villages: villages,
+                        );
+                      } else {
+                        errorMessage = await AdminService.updatePenyuluh(
+                          id: penyuluhToEdit.id,
+                          name: name,
+                          username: username,
+                          email: email,
+                          password: '',
+                          noHp: phone,
+                          villages: villages,
+                        );
+                      }
+
+                      if (errorMessage == null) {
+                        if (mounted) Navigator.pop(context);
+                        _showSnackBar(penyuluhToEdit == null ? 'Penyuluh berhasil ditambahkan!' : 'Penyuluh berhasil diperbarui!', isSuccess: true);
+                        _fetchPenyuluh();
+                        _fetchDesaForPenyuluh();
+                      } else {
+                        _showSnackBar(errorMessage, isSuccess: false);
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF7B1FA2),
                       shape: RoundedRectangleBorder(
@@ -647,9 +651,9 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
                       ),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      'Buat Akun & Tugaskan Desa',
-                      style: TextStyle(
+                    child: Text(
+                      penyuluhToEdit == null ? 'Buat Akun & Tugaskan Desa' : 'Perbarui Akun',
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -665,7 +669,7 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
     );
   }
 
-  Widget _buildTextField(String label, String hint, {bool isPassword = false}) {
+  Widget _buildTextField(String label, String hint, {bool isPassword = false, TextEditingController? controller}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -679,6 +683,7 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
         ),
         const SizedBox(height: 8),
         TextField(
+          controller: controller,
           obscureText: isPassword,
           decoration: InputDecoration(
             hintText: hint,

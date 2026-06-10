@@ -4,6 +4,7 @@ import 'package:fe_photobug/screens/petani/riwayat_laporan_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/services/report_service.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 
 class PetaniDashboardScreen extends StatefulWidget {
   const PetaniDashboardScreen({super.key});
@@ -346,19 +347,9 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
                         ),
                       ),
                     ],
-                    onSelected: (value) async {
+                    onSelected: (value) {
                       if (value == 1) {
-                        // Call logout API
-                        await AuthService.logout();
-                        
-                        // Navigate to login
-                        if (mounted) {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LoginScreen()),
-                            (route) => false,
-                          );
-                        }
+                        DialogUtils.showLogoutConfirmation(context);
                       }
                     },
                   ),

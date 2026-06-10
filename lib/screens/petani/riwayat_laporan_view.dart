@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fe_photobug/services/detection_service.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 import 'laporan_hasil_screen.dart';
 import 'riwayat_detail_screen.dart';
 
@@ -215,16 +216,9 @@ class _RiwayatLaporanViewState extends State<RiwayatLaporanView>
                         ),
                       ),
                     ],
-                    onSelected: (value) async {
+                    onSelected: (value) {
                       if (value == 1) {
-                        await AuthService.logout();
-                        if (mounted) {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LoginScreen()),
-                            (route) => false,
-                          );
-                        }
+                        DialogUtils.showLogoutConfirmation(context);
                       }
                     },
                   ),

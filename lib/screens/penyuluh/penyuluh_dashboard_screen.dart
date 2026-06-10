@@ -5,6 +5,7 @@ import 'package:fe_photobug/screens/penyuluh/notifikasi_penyuluh_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/penyuluh_service.dart';
 import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 
 class PenyuluhDashboardScreen extends StatefulWidget {
   const PenyuluhDashboardScreen({super.key});
@@ -15,6 +16,8 @@ class PenyuluhDashboardScreen extends StatefulWidget {
 
 class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   int _currentIndex = 0;
+  int _laporanInitialTab = 0;
+  Key _laporanKey = UniqueKey();
   bool _isLoadingStatus = true;
   bool _isLoadingTrend = true;
   String _villageName = 'Memuat...';
@@ -56,7 +59,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
         index: _currentIndex,
         children: [
           _buildBerandaView(topPadding),
-          LaporanPenyuluhView(topPadding: topPadding),
+          LaporanPenyuluhView(key: _laporanKey, topPadding: topPadding, initialTabIndex: _laporanInitialTab),
           NotifikasiPenyuluhView(topPadding: topPadding),
         ],
       ),
@@ -89,18 +92,20 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                   const SizedBox(height: 24),
                   _buildChartCard(),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Tindakan Mendesak',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF4A148C),
-                      letterSpacing: -0.3,
+                  if (!_isLoadingStatus && _reportStatus.success && _reportStatus.waitingVerification > 0) ...[
+                    const Text(
+                      'Tindakan Mendesak',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF4A148C),
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildAlertCard(),
-                  const SizedBox(height: 28),
+                    const SizedBox(height: 12),
+                    _buildAlertCard(),
+                    const SizedBox(height: 28),
+                  ],
                   const Text(
                     'Info Hama Terkini',
                     style: TextStyle(
@@ -342,16 +347,9 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                             ),
                           ),
                         ],
-                        onSelected: (value) async {
+                        onSelected: (value) {
                           if (value == 1) {
-                            await AuthService.logout();
-                            if (mounted) {
-                              Navigator.pushAndRemoveUntil(
-                                context,
-                                MaterialPageRoute(builder: (context) => const LoginScreen()),
-                                (route) => false,
-                              );
-                            }
+                            DialogUtils.showLogoutConfirmation(context);
                           }
                         },
                       ),
@@ -685,10 +683,14 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   }
 
   Widget _buildAlertCard() {
+    final count = _reportStatus.waitingVerification;
+
     return GestureDetector(
       onTap: () {
         setState(() {
           _currentIndex = 1; // Index tab Laporan
+          _laporanInitialTab = 1; // Tab Menunggu
+          _laporanKey = UniqueKey();
         });
       },
       child: Container(
@@ -714,9 +716,9 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '3 Laporan Menunggu Balasan!',
-                        style: TextStyle(
+                      Text(
+                        '$count Laporan Menunggu Balasan!',
+                        style: const TextStyle(
                           color: Color(0xFFB42318),
                           fontWeight: FontWeight.w800,
                           fontSize: 14,

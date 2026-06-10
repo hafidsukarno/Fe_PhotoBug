@@ -3,6 +3,7 @@ import 'package:fe_photobug/screens/petani/laporan_hasil_screen.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/services/detection_service.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:typed_data';
@@ -296,19 +297,9 @@ class _LaporanViewState extends State<LaporanView> {
                             ),
                           ),
                         ],
-                        onSelected: (value) async {
+                        onSelected: (value) {
                           if (value == 1) {
-                            // Call logout API
-                            await AuthService.logout();
-                            
-                            // Navigate to login
-                            if (mounted) {
-                              Navigator.pushAndRemoveUntil(
-                                context,
-                                MaterialPageRoute(builder: (context) => const LoginScreen()),
-                                (route) => false,
-                              );
-                            }
+                            DialogUtils.showLogoutConfirmation(context);
                           }
                         },
                       ),

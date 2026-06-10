@@ -3,6 +3,7 @@ import 'package:fe_photobug/screens/penyuluh/laporan_detail_penyuluh_screen.dart
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/services/penyuluh_service.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 
 class NotifikasiPenyuluhView extends StatefulWidget {
   final double topPadding;
@@ -274,16 +275,9 @@ class _NotifikasiPenyuluhViewState extends State<NotifikasiPenyuluhView> {
                         ),
                       ),
                     ],
-                    onSelected: (value) async {
+                    onSelected: (value) {
                       if (value == 1) {
-                        await AuthService.logout();
-                        if (context.mounted) {
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LoginScreen()),
-                            (route) => false,
-                          );
-                        }
+                        DialogUtils.showLogoutConfirmation(context);
                       }
                     },
                   ),

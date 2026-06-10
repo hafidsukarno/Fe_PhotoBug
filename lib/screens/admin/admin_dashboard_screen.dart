@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:fe_photobug/screens/admin/laporan_admin_view.dart';
+import 'package:fe_photobug/screens/admin/kelola_desa_admin_view.dart';
 import 'package:fe_photobug/screens/admin/pengguna_admin_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/admin_service.dart';
 import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/utils/dialog_utils.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -53,7 +54,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         index: _currentIndex,
         children: [
           _buildDasborView(topPadding),
-          LaporanAdminView(topPadding: topPadding),
+          KelolaDesaAdminView(topPadding: topPadding),
           PenggunaAdminView(topPadding: topPadding),
         ],
       ),
@@ -286,11 +287,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ],
                         onSelected: (value) {
                           if (value == 1) {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (context) => const LoginScreen()),
-                              (route) => false,
-                            );
+                            DialogUtils.showLogoutConfirmation(context);
                           }
                         },
                       ),
@@ -390,29 +387,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 // ---- CAKUPAN DESA BINAAN ----
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
+                  children: const [
+                    Text(
                       'Cakupan Desa Binaan',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF1A1A2E),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {},
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'Lihat Semua',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF7B1FA2),
-                        ),
                       ),
                     ),
                   ],
@@ -746,7 +727,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(Icons.home_rounded, 'Dasbor', 0),
-              _buildNavItem(Icons.description_outlined, 'Laporan', 1),
+              _buildNavItem(Icons.location_city_rounded, 'Kelola Desa', 1),
               _buildNavItem(Icons.people_alt_outlined, 'Pengguna', 2),
             ],
           ),
@@ -758,7 +739,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _buildNavItem(IconData icon, String label, int index) {
     final isSelected = _currentIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () {
+        setState(() => _currentIndex = index);
+        if (index == 0) {
+          _loadData(); // Refresh data saat kembali ke dasbor
+        }
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -923,16 +909,23 @@ class _DesaItem extends StatelessWidget {
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              nama,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A2E),
+            Expanded(
+              child: Text(
+                nama,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A2E),
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 _Badge(
                   icon: Icons.description_outlined,
