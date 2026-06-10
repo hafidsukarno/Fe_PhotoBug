@@ -15,6 +15,7 @@ class PetaniDashboardScreen extends StatefulWidget {
 
 class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
   int _currentIndex = 0;
+  final GlobalKey<RiwayatLaporanViewState> _riwayatKey = GlobalKey<RiwayatLaporanViewState>();
   bool _isLoadingStatus = true;
   String _petaniVillage = 'Loading...';
   late ReportStatusResponse _reportStatus;
@@ -52,8 +53,16 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
         index: _currentIndex,
         children: [
           _buildBerandaView(topPadding),
-          const LaporanView(),
-          const RiwayatLaporanView(),
+          LaporanView(
+            onReportSubmitted: (int targetTab) {
+              setState(() {
+                _currentIndex = targetTab;
+              });
+              _loadReportStatus(); // Refresh dashboard stats
+              _riwayatKey.currentState?.silentRefresh(); // Refresh riwayat
+            },
+          ),
+          RiwayatLaporanView(key: _riwayatKey),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),

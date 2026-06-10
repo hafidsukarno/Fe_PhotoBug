@@ -804,9 +804,9 @@ class LaporanHasilScreen extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.home_rounded, 'Beranda', false, () => Navigator.pop(context)),
+              _buildNavItem(Icons.home_rounded, 'Beranda', false, () => Navigator.pop(context, 0)),
               _buildNavItem(Icons.description_outlined, 'Laporan', true, () {}),
-              _buildNavItem(Icons.history_rounded, 'Riwayat', false, () => Navigator.pop(context)),
+              _buildNavItem(Icons.history_rounded, 'Riwayat', false, () => Navigator.pop(context, 2)),
             ],
           ),
         ),

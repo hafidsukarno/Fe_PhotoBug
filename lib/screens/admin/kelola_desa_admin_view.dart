@@ -9,10 +9,10 @@ class KelolaDesaAdminView extends StatefulWidget {
   const KelolaDesaAdminView({super.key, required this.topPadding});
 
   @override
-  State<KelolaDesaAdminView> createState() => _KelolaDesaAdminViewState();
+  State<KelolaDesaAdminView> createState() => KelolaDesaAdminViewState();
 }
 
-class _KelolaDesaAdminViewState extends State<KelolaDesaAdminView> {
+class KelolaDesaAdminViewState extends State<KelolaDesaAdminView> {
   List<Village> _desaList = [];
   Map<String, String> _desaStatusMap = {};
   bool _isLoadingDesa = true;
@@ -26,8 +26,10 @@ class _KelolaDesaAdminViewState extends State<KelolaDesaAdminView> {
     _fetchDesa();
   }
 
-  Future<void> _fetchDesa() async {
-    setState(() => _isLoadingDesa = true);
+  Future<void> _fetchDesa({bool isSilent = false}) async {
+    if (!isSilent || _desaList.isEmpty) {
+      setState(() => _isLoadingDesa = true);
+    }
     final villages = await AdminService.getVillages();
     final statusMap = await AdminService.getVillagesStatus();
     if (mounted) {
@@ -37,6 +39,10 @@ class _KelolaDesaAdminViewState extends State<KelolaDesaAdminView> {
         _isLoadingDesa = false;
       });
     }
+  }
+
+  void silentRefresh() {
+    _fetchDesa(isSilent: true);
   }
 
   @override

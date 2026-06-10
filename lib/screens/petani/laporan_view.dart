@@ -9,7 +9,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 class LaporanView extends StatefulWidget {
-  const LaporanView({super.key});
+  final void Function(int)? onReportSubmitted;
+
+  const LaporanView({super.key, this.onReportSubmitted});
 
   @override
   State<LaporanView> createState() => _LaporanViewState();
@@ -83,7 +85,7 @@ class _LaporanViewState extends State<LaporanView> {
         });
         
         // Navigate to result screen with detection data
-        Navigator.push(
+        final targetTab = await Navigator.push<int>(
           context,
           MaterialPageRoute(
             builder: (context) => LaporanHasilScreen(
@@ -93,6 +95,10 @@ class _LaporanViewState extends State<LaporanView> {
             ),
           ),
         );
+
+        if (widget.onReportSubmitted != null) {
+          widget.onReportSubmitted!(targetTab ?? 0);
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(response.message)),

@@ -17,7 +17,7 @@ class PenyuluhDashboardScreen extends StatefulWidget {
 class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   int _currentIndex = 0;
   int _laporanInitialTab = 0;
-  Key _laporanKey = UniqueKey();
+  GlobalKey<LaporanPenyuluhViewState> _laporanKey = GlobalKey<LaporanPenyuluhViewState>();
   bool _isLoadingStatus = true;
   bool _isLoadingTrend = true;
   String _villageName = 'Memuat...';
@@ -690,7 +690,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
         setState(() {
           _currentIndex = 1; // Index tab Laporan
           _laporanInitialTab = 1; // Tab Menunggu
-          _laporanKey = UniqueKey();
+          _laporanKey = GlobalKey<LaporanPenyuluhViewState>();
         });
       },
       child: Container(
@@ -866,7 +866,16 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   Widget _buildNavItem(IconData icon, String label, int index) {
     final isSelected = _currentIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () {
+        setState(() {
+          _currentIndex = index;
+        });
+        if (index == 0) {
+          _loadData();
+        } else if (index == 1) {
+          _laporanKey.currentState?.silentRefresh();
+        }
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

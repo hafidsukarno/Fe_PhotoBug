@@ -8,11 +8,10 @@ class PenggunaAdminView extends StatefulWidget {
 
   const PenggunaAdminView({super.key, required this.topPadding});
 
-  @override
-  State<PenggunaAdminView> createState() => _PenggunaAdminViewState();
+  State<PenggunaAdminView> createState() => PenggunaAdminViewState();
 }
 
-class _PenggunaAdminViewState extends State<PenggunaAdminView> {
+class PenggunaAdminViewState extends State<PenggunaAdminView> {
   @override
   void initState() {
     super.initState();
@@ -47,8 +46,10 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
   List<PenyuluhItem> _penyuluhList = [];
   bool _isLoadingPenyuluh = true;
 
-  Future<void> _fetchPenyuluh() async {
-    setState(() => _isLoadingPenyuluh = true);
+  Future<void> _fetchPenyuluh({bool isSilent = false}) async {
+    if (!isSilent || _penyuluhList.isEmpty) {
+      setState(() => _isLoadingPenyuluh = true);
+    }
     final penyuluh = await AdminService.getPenyuluhList();
     if (mounted) {
       setState(() {
@@ -417,6 +418,11 @@ class _PenggunaAdminViewState extends State<PenggunaAdminView> {
   final TextEditingController _penyuluhEmailCtrl = TextEditingController();
   final TextEditingController _penyuluhPhoneCtrl = TextEditingController();
   final TextEditingController _penyuluhPasswordCtrl = TextEditingController();
+
+  void silentRefresh() {
+    _fetchDesaForPenyuluh();
+    _fetchPenyuluh(isSilent: true);
+  }
 
   void _showSnackBar(String message, {bool isSuccess = true}) {
     if (!mounted) return;

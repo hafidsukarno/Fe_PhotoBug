@@ -16,6 +16,8 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _currentIndex = 0;
+  final GlobalKey<KelolaDesaAdminViewState> _kelolaDesaKey = GlobalKey<KelolaDesaAdminViewState>();
+  final GlobalKey<PenggunaAdminViewState> _penggunaKey = GlobalKey<PenggunaAdminViewState>();
   bool _isLoading = true;
   AdminDashboardData? _dashboardStats;
   VillagesReportData? _villagesReport;
@@ -54,8 +56,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         index: _currentIndex,
         children: [
           _buildDasborView(topPadding),
-          KelolaDesaAdminView(topPadding: topPadding),
-          PenggunaAdminView(topPadding: topPadding),
+          KelolaDesaAdminView(key: _kelolaDesaKey, topPadding: topPadding),
+          PenggunaAdminView(key: _penggunaKey, topPadding: topPadding),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),
@@ -740,10 +742,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final isSelected = _currentIndex == index;
     return GestureDetector(
       onTap: () {
-        setState(() => _currentIndex = index);
-        if (index == 0) {
-          _loadData(); // Refresh data saat kembali ke dasbor
-        }
+        setState(() {
+          _currentIndex = index;
+          if (index == 0) {
+            _loadData();
+          } else if (index == 1) {
+            _kelolaDesaKey.currentState?.silentRefresh();
+          } else if (index == 2) {
+            _penggunaKey.currentState?.silentRefresh();
+          }
+        });
       },
       behavior: HitTestBehavior.opaque,
       child: Padding(

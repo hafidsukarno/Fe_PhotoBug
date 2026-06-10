@@ -10,10 +10,10 @@ class RiwayatLaporanView extends StatefulWidget {
   const RiwayatLaporanView({super.key});
 
   @override
-  State<RiwayatLaporanView> createState() => _RiwayatLaporanViewState();
+  State<RiwayatLaporanView> createState() => RiwayatLaporanViewState();
 }
 
-class _RiwayatLaporanViewState extends State<RiwayatLaporanView>
+class RiwayatLaporanViewState extends State<RiwayatLaporanView>
     with SingleTickerProviderStateMixin {
   TabController? _tabController;
   String _searchQuery = '';
@@ -24,10 +24,27 @@ class _RiwayatLaporanViewState extends State<RiwayatLaporanView>
     return _tabController!;
   }
 
+  late Future<HistoryResponse> _futureAll;
+  late Future<HistoryResponse> _futurePending;
+  late Future<HistoryResponse> _futureCompleted;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _refreshData();
+  }
+
+  void _refreshData() {
+    _futureAll = DetectionService.getHistory('all');
+    _futurePending = DetectionService.getHistory('pending');
+    _futureCompleted = DetectionService.getHistory('completed');
+  }
+
+  void silentRefresh() {
+    setState(() {
+      _refreshData();
+    });
   }
 
   @override
@@ -321,9 +338,9 @@ class _RiwayatLaporanViewState extends State<RiwayatLaporanView>
           child: TabBarView(
             controller: tabController,
             children: [
-              _buildHistoryList(DetectionService.getHistory('all'), 'Semua Laporan'),
-              _buildHistoryList(DetectionService.getHistory('pending'), 'Laporan Menunggu'),
-              _buildHistoryList(DetectionService.getHistory('completed'), 'Laporan Selesai'),
+              _buildHistoryList(_futureAll, 'Semua Laporan'),
+              _buildHistoryList(_futurePending, 'Laporan Menunggu'),
+              _buildHistoryList(_futureCompleted, 'Laporan Selesai'),
             ],
           ),
         ),
@@ -335,7 +352,7 @@ class _RiwayatLaporanViewState extends State<RiwayatLaporanView>
     return FutureBuilder<HistoryResponse>(
       future: future,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF7B1FA2)),
           );

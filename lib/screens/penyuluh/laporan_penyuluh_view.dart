@@ -16,10 +16,10 @@ class LaporanPenyuluhView extends StatefulWidget {
   });
 
   @override
-  State<LaporanPenyuluhView> createState() => _LaporanPenyuluhViewState();
+  State<LaporanPenyuluhView> createState() => LaporanPenyuluhViewState();
 }
 
-class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
+class LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -27,6 +27,28 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  late Future<PenyuluhReportResponse> futureAll;
+  late Future<PenyuluhReportResponse> futurePending;
+  late Future<PenyuluhReportResponse> futureCompleted;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshData();
+  }
+
+  void _refreshData() {
+    futureAll = PenyuluhService.getReports('all');
+    futurePending = PenyuluhService.getReports('pending');
+    futureCompleted = PenyuluhService.getReports('completed');
+  }
+
+  void silentRefresh() {
+    setState(() {
+      _refreshData();
+    });
   }
 
   @override
@@ -40,9 +62,9 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
           Expanded(
             child: TabBarView(
               children: [
-                _buildListView(PenyuluhService.getReports('all'), 'Semua Laporan'),
-                _buildListView(PenyuluhService.getReports('pending'), 'Laporan Menunggu'),
-                _buildListView(PenyuluhService.getReports('completed'), 'Laporan Selesai'),
+                _buildListView(futureAll, 'Semua Laporan'),
+                _buildListView(futurePending, 'Laporan Menunggu'),
+                _buildListView(futureCompleted, 'Laporan Selesai'),
               ],
             ),
           ),
@@ -359,7 +381,7 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
     return FutureBuilder<PenyuluhReportResponse>(
       future: future,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF7B1FA2)),
           );
@@ -490,7 +512,7 @@ class _LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
           ),
         );
         if (result == true) {
-          setState(() {});
+          silentRefresh();
         }
       },
       child: Container(
