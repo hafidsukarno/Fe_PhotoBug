@@ -293,7 +293,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                               const SizedBox(height: 8),
                               _buildTextField(
                                 controller: _nameController,
-                                hint: 'Hafid Sukarno',
+                                hint: 'Masukkan nama lengkap',
                                 icon: Icons.person_outline,
                               ),
                               SizedBox(height: screenHeight * 0.022),
@@ -303,7 +303,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                             const SizedBox(height: 8),
                             _buildTextField(
                               controller: _usernameController,
-                              hint: 'hafid',
+                              hint: 'Masukkan username',
                               icon: Icons.alternate_email_rounded,
                             ),
                             SizedBox(height: screenHeight * 0.022),
@@ -313,7 +313,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                             const SizedBox(height: 8),
                             _buildTextField(
                               controller: _emailController,
-                              hint: 'hafid@gmail.com',
+                              hint: 'Masukkan alamat email',
                               icon: Icons.email_outlined,
                               keyboardType: TextInputType.emailAddress,
                             ),

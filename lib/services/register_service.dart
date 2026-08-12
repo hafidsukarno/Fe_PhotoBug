@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class RegisterService {
-  static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'http://127.0.0.1:8000';
   static const String registerEndpoint = '$baseUrl/api/register';
   static const String villagesEndpoint = '$baseUrl/api/villages';
 

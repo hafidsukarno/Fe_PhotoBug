@@ -4,6 +4,7 @@ import 'package:fe_photobug/screens/petani/petani_dashboard_screen.dart';
 import 'package:fe_photobug/screens/penyuluh/penyuluh_dashboard_screen.dart';
 import 'package:fe_photobug/screens/admin/admin_dashboard_screen.dart';
 import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/screens/auth/forgot_password_email_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -309,7 +310,7 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(height: 8),
                             _buildTextField(
                               controller: _usernameController,
-                              hint: 'Daniel',
+                              hint: 'Masukkan username',
                               icon: Icons.person_outline,
                               keyboardType: TextInputType.text,
                             ),
@@ -345,7 +346,12 @@ class _LoginScreenState extends State<LoginScreen>
                               alignment: Alignment.centerRight,
                               child: TextButton(
                                 onPressed: () {
-                                  // TODO: Navigate to forgot password
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const ForgotPasswordEmailScreen(),
+                                    ),
+                                  );
                                 },
                                 style: TextButton.styleFrom(
                                   padding: EdgeInsets.zero,

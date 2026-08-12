@@ -8,11 +8,15 @@ import 'package:fe_photobug/utils/dialog_utils.dart';
 class LaporanPenyuluhView extends StatefulWidget {
   final double topPadding;
   final int initialTabIndex;
+  final DateTime? selectedStartMonth;
+  final DateTime? selectedEndMonth;
 
   const LaporanPenyuluhView({
     super.key, 
     required this.topPadding,
     this.initialTabIndex = 0,
+    this.selectedStartMonth,
+    this.selectedEndMonth,
   });
 
   @override
@@ -39,10 +43,35 @@ class LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
     _refreshData();
   }
 
+  @override
+  void didUpdateWidget(covariant LaporanPenyuluhView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedStartMonth != widget.selectedStartMonth ||
+        oldWidget.selectedEndMonth != widget.selectedEndMonth) {
+      _refreshData();
+    }
+  }
+
+  String _formatMonthName(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return "${months[dt.month - 1]} ${dt.year}";
+  }
+
   void _refreshData() {
-    futureAll = PenyuluhService.getReports('all');
-    futurePending = PenyuluhService.getReports('pending');
-    futureCompleted = PenyuluhService.getReports('completed');
+    String? startStr;
+    String? endStr;
+
+    if (widget.selectedStartMonth != null) {
+      startStr = "${widget.selectedStartMonth!.year}-${widget.selectedStartMonth!.month.toString().padLeft(2, '0')}-01";
+    }
+    if (widget.selectedEndMonth != null) {
+      final lastDay = DateTime(widget.selectedEndMonth!.year, widget.selectedEndMonth!.month + 1, 0).day;
+      endStr = "${widget.selectedEndMonth!.year}-${widget.selectedEndMonth!.month.toString().padLeft(2, '0')}-$lastDay";
+    }
+
+    futureAll = PenyuluhService.getReports('all', startStr, endStr);
+    futurePending = PenyuluhService.getReports('pending', startStr, endStr);
+    futureCompleted = PenyuluhService.getReports('completed', startStr, endStr);
   }
 
   void silentRefresh() {
@@ -152,6 +181,17 @@ class LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                               letterSpacing: -0.3,
                             ),
                           ),
+                          if (widget.selectedStartMonth != null || widget.selectedEndMonth != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Periode: ${widget.selectedStartMonth != null ? _formatMonthName(widget.selectedStartMonth!) : 'Awal'} s/d ${widget.selectedEndMonth != null ? _formatMonthName(widget.selectedEndMonth!) : 'Kini'}',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],
@@ -615,6 +655,47 @@ class LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
                             ),
                           ],
                         ),
+                        if (item.ricePhase != null || item.hazardLevel != null) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              if (item.ricePhase != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE1F5FE),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _getDisplayRicePhase(item.ricePhase),
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0288D1),
+                                    ),
+                                  ),
+                                ),
+                              if (item.hazardLevel != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _getHazardColor(item.hazardLevel).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    item.hazardLevel!.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: _getHazardColor(item.hazardLevel),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -697,5 +778,31 @@ class LaporanPenyuluhViewState extends State<LaporanPenyuluhView> {
         ),
       ),
     );
+  }
+
+  Color _getHazardColor(String? level) {
+    switch (level?.toLowerCase()) {
+      case 'tidak bahaya':
+        return const Color(0xFF2E7D32);
+      case 'bahaya':
+        return const Color(0xFFE65100);
+      case 'sangat bahaya':
+        return const Color(0xFFC62828);
+      default:
+        return Colors.grey.shade600;
+    }
+  }
+
+  String _getDisplayRicePhase(String? phase) {
+    switch (phase?.toLowerCase()) {
+      case 'vegetatif':
+        return 'Vegetatif (< 40 HST)';
+      case 'generatif':
+        return 'Generatif (~40-60 HST)';
+      case 'pematangan':
+        return 'Pematangan (~60-90+ HST)';
+      default:
+        return phase ?? '-';
+    }
   }
 }

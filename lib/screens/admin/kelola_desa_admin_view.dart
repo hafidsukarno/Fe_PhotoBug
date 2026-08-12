@@ -385,6 +385,34 @@ class KelolaDesaAdminViewState extends State<KelolaDesaAdminView> {
     );
   }
 
+  void _showErrorDialog(String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, color: Colors.red.shade600, size: 24),
+            const SizedBox(width: 8),
+            const Text('Gagal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(fontSize: 14)),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7B1FA2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showDeleteConfirmation({
     required String title,
     required String content,
@@ -486,13 +514,30 @@ class KelolaDesaAdminViewState extends State<KelolaDesaAdminView> {
                 onPressed: () async {
                   final name = _desaNameCtrl.text;
                   final dist = _desaDistrictCtrl.text;
-                  if (name.isEmpty || dist.isEmpty) return;
+                  
+                  final cleanedName = name.trim();
+                  final cleanedDist = dist.trim();
+
+                  if (cleanedName.isEmpty || cleanedDist.isEmpty) {
+                    _showErrorDialog('Harap lengkapi semua field (Nama Desa dan Kecamatan)');
+                    return;
+                  }
+
+                  if (cleanedName.length < 3) {
+                    _showErrorDialog('Nama desa minimal harus 3 karakter');
+                    return;
+                  }
+
+                  if (cleanedDist.length < 3) {
+                    _showErrorDialog('Nama kecamatan/distrik minimal harus 3 karakter');
+                    return;
+                  }
 
                   String? errorMessage;
                   if (desaToEdit == null) {
-                    errorMessage = await AdminService.createVillage(name, dist);
+                    errorMessage = await AdminService.createVillage(cleanedName, cleanedDist);
                   } else {
-                    errorMessage = await AdminService.updateVillage(desaToEdit.id, name, dist);
+                    errorMessage = await AdminService.updateVillage(desaToEdit.id, cleanedName, cleanedDist);
                   }
 
                   if (errorMessage == null) {
@@ -500,7 +545,7 @@ class KelolaDesaAdminViewState extends State<KelolaDesaAdminView> {
                     _showSnackBar(desaToEdit == null ? 'Desa berhasil ditambahkan' : 'Desa berhasil diperbarui', isSuccess: true);
                     _fetchDesa();
                   } else {
-                    _showSnackBar(errorMessage, isSuccess: false);
+                    _showErrorDialog(errorMessage);
                   }
                 },
                 style: ElevatedButton.styleFrom(

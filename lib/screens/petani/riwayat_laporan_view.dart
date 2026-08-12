@@ -7,7 +7,14 @@ import 'laporan_hasil_screen.dart';
 import 'riwayat_detail_screen.dart';
 
 class RiwayatLaporanView extends StatefulWidget {
-  const RiwayatLaporanView({super.key});
+  final DateTime? selectedStartMonth;
+  final DateTime? selectedEndMonth;
+
+  const RiwayatLaporanView({
+    super.key,
+    this.selectedStartMonth,
+    this.selectedEndMonth,
+  });
 
   @override
   State<RiwayatLaporanView> createState() => RiwayatLaporanViewState();
@@ -35,10 +42,35 @@ class RiwayatLaporanViewState extends State<RiwayatLaporanView>
     _refreshData();
   }
 
+  @override
+  void didUpdateWidget(covariant RiwayatLaporanView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedStartMonth != widget.selectedStartMonth ||
+        oldWidget.selectedEndMonth != widget.selectedEndMonth) {
+      setState(() => _refreshData());
+    }
+  }
+
+  String _formatMonthName(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return "${months[dt.month - 1]} ${dt.year}";
+  }
+
   void _refreshData() {
-    _futureAll = DetectionService.getHistory('all');
-    _futurePending = DetectionService.getHistory('pending');
-    _futureCompleted = DetectionService.getHistory('completed');
+    String? startStr;
+    String? endStr;
+
+    if (widget.selectedStartMonth != null) {
+      startStr = "${widget.selectedStartMonth!.year}-${widget.selectedStartMonth!.month.toString().padLeft(2, '0')}-01";
+    }
+    if (widget.selectedEndMonth != null) {
+      final lastDay = DateTime(widget.selectedEndMonth!.year, widget.selectedEndMonth!.month + 1, 0).day;
+      endStr = "${widget.selectedEndMonth!.year}-${widget.selectedEndMonth!.month.toString().padLeft(2, '0')}-$lastDay";
+    }
+
+    _futureAll = DetectionService.getHistory('all', dateFrom: startStr, dateTo: endStr);
+    _futurePending = DetectionService.getHistory('pending', dateFrom: startStr, dateTo: endStr);
+    _futureCompleted = DetectionService.getHistory('completed', dateFrom: startStr, dateTo: endStr);
   }
 
   void silentRefresh() {
@@ -131,6 +163,17 @@ class RiwayatLaporanViewState extends State<RiwayatLaporanView>
                               letterSpacing: -0.3,
                             ),
                           ),
+                          if (widget.selectedStartMonth != null || widget.selectedEndMonth != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Periode: ${widget.selectedStartMonth != null ? _formatMonthName(widget.selectedStartMonth!) : 'Awal'} s/d ${widget.selectedEndMonth != null ? _formatMonthName(widget.selectedEndMonth!) : 'Kini'}',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],
@@ -314,14 +357,8 @@ class RiwayatLaporanViewState extends State<RiwayatLaporanView>
                   ),
                   labelColor: const Color(0xFF4A148C),
                   unselectedLabelColor: Colors.white.withValues(alpha: 0.85),
-                  labelStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   tabs: const [
                     Tab(text: 'Semua'),
                     Tab(text: 'Menunggu'),
@@ -490,7 +527,7 @@ class RiwayatLaporanViewState extends State<RiwayatLaporanView>
                     width: 100,
                     height: 100,
                     child: Image.network(
-                      'http://localhost:8000/api/image/${item.imagePath}',
+                      'http://127.0.0.1:8000/api/image/${item.imagePath}',
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: Colors.grey.shade200,
@@ -567,14 +604,14 @@ class RiwayatLaporanViewState extends State<RiwayatLaporanView>
                 ),
               ],
             ),
-            // ===== MIDDLE: REKOMENDASI AI =====
+            // ===== MIDDLE: REKOMENDASI PENANGANAN =====
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'REKOMENDASI AI (${item.highestConfidence})',
+                    'REKOMENDASI PENANGANAN (${item.highestConfidence})',
                     style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,

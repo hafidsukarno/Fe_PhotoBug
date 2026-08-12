@@ -1,16 +1,22 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/services/admin_service.dart';
 
 class ReportService {
-  static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'http://127.0.0.1:8000';
   static const String reportStatusEndpoint = '$baseUrl/api/petani/report-status';
 
-  // Fetch status laporan
-  static Future<ReportStatusResponse> getReportStatus() async {
+  // Fetch status laporan dengan filter tanggal
+  static Future<ReportStatusResponse> getReportStatus({String? dateFrom, String? dateTo}) async {
     try {
+      final List<String> params = [];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      final queryStr = params.isNotEmpty ? '?${params.join('&')}' : '';
+
       final response = await http.get(
-        Uri.parse(reportStatusEndpoint),
+        Uri.parse('$reportStatusEndpoint$queryStr'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -48,6 +54,30 @@ class ReportService {
         success: false,
         message: 'Error: $e',
       );
+    }
+  }
+
+  static Future<List<ArticleItem>> getArticles() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/articles'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${AuthService.authToken}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          final List list = data['data'] ?? [];
+          return list.map((e) => ArticleItem.fromJson(e)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error getArticles in ReportService: $e');
+      return [];
     }
   }
 }

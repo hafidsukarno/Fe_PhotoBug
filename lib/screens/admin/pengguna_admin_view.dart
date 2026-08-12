@@ -114,7 +114,7 @@ class PenggunaAdminViewState extends State<PenggunaAdminView> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Kelola data desa dan akun penyuluh lapangan',
+                      'Kelola akun penyuluh lapangan',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.white.withValues(alpha: 0.8),
@@ -436,6 +436,34 @@ class PenggunaAdminViewState extends State<PenggunaAdminView> {
     );
   }
 
+  void _showErrorDialog(String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, color: Colors.red.shade600, size: 24),
+            const SizedBox(width: 8),
+            const Text('Gagal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(fontSize: 14)),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7B1FA2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showDeleteConfirmation({
     required String title,
     required String content,
@@ -489,9 +517,10 @@ class PenggunaAdminViewState extends State<PenggunaAdminView> {
     _penyuluhPhoneCtrl.text = penyuluhToEdit?.noHp ?? '';
     _penyuluhPasswordCtrl.text = ''; // Password selalu kosong
 
-    final Map<int, bool> selectedDesa = {
-      for (var d in _desaList) d.id: penyuluhToEdit?.managedVillages.contains(d.villageName) ?? false
-    };
+    List<Village>? localDesaList;
+    Map<String, String>? localDesaStatusMap;
+    final Map<int, bool> selectedDesa = {};
+    bool isLoadingDesa = true;
 
     showModalBottomSheet(
       context: context,
@@ -499,6 +528,40 @@ class PenggunaAdminViewState extends State<PenggunaAdminView> {
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setSheetState) {
+          if (isLoadingDesa && localDesaList == null) {
+            Future.wait([
+              AdminService.getVillages(),
+              AdminService.getVillagesStatus(),
+            ]).then((results) {
+              final villages = results[0] as List<Village>;
+              final statusMap = results[1] as Map<String, String>;
+              if (context.mounted) {
+                setSheetState(() {
+                  localDesaList = villages;
+                  localDesaStatusMap = statusMap;
+                  isLoadingDesa = false;
+                  for (var d in villages) {
+                    selectedDesa[d.id] = penyuluhToEdit?.managedVillages.contains(d.villageName) ?? false;
+                  }
+                });
+                
+                // Update parent state silently for consistency
+                if (mounted) {
+                  setState(() {
+                    _desaList = villages;
+                    _desaStatusMap = statusMap;
+                  });
+                }
+              }
+            }).catchError((error) {
+              if (context.mounted) {
+                setSheetState(() {
+                  isLoadingDesa = false;
+                });
+              }
+            });
+          }
+
           return Container(
             height: MediaQuery.of(context).size.height * 0.85,
             decoration: const BoxDecoration(
@@ -558,39 +621,56 @@ class PenggunaAdminViewState extends State<PenggunaAdminView> {
                       // Bagian Desa Binaan
                       const Text('PILIH DESA BINAAN (PENUGASAN)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey)),
                       const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade200),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          children: _desaList.map((desa) {
-                            final status = _desaStatusMap[desa.villageName] ?? 'kosong';
-                            // Kalau edit dan desa ini milik dia, jangan di-disable
-                            final isOwner = penyuluhToEdit != null && penyuluhToEdit.managedVillages.contains(desa.villageName);
-                            final isTerisi = status == 'terisi' && !isOwner;
-
-                            return CheckboxListTile(
-                              title: Text(
-                                isTerisi ? '${desa.villageName} (Sudah Terisi)' : desa.villageName,
-                                style: TextStyle(
-                                  fontSize: 14, 
-                                  fontWeight: FontWeight.w600,
-                                  color: isTerisi ? Colors.grey : const Color(0xFF1A1A2E),
-                                ),
+                      isLoadingDesa
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: CircularProgressIndicator(color: Color(0xFF7B1FA2)),
                               ),
-                              value: selectedDesa[desa.id],
-                              activeColor: const Color(0xFF7B1FA2),
-                              checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              onChanged: isTerisi ? null : (bool? value) {
-                                setSheetState(() {
-                                  selectedDesa[desa.id] = value ?? false;
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                      ),
+                            )
+                          : localDesaList == null || localDesaList!.isEmpty
+                              ? const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(16.0),
+                                    child: Text(
+                                      'Tidak ada desa tersedia atau gagal memuat data.',
+                                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey.shade200),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Column(
+                                    children: localDesaList!.map((desa) {
+                                      final status = localDesaStatusMap?[desa.villageName] ?? 'kosong';
+                                      // Kalau edit dan desa ini milik dia, jangan di-disable
+                                      final isOwner = penyuluhToEdit != null && penyuluhToEdit.managedVillages.contains(desa.villageName);
+                                      final isTerisi = status == 'terisi' && !isOwner;
+
+                                      return CheckboxListTile(
+                                        title: Text(
+                                          isTerisi ? '${desa.villageName} (Sudah Terisi)' : desa.villageName,
+                                          style: TextStyle(
+                                            fontSize: 14, 
+                                            fontWeight: FontWeight.w600,
+                                            color: isTerisi ? Colors.grey : const Color(0xFF1A1A2E),
+                                          ),
+                                        ),
+                                        value: selectedDesa[desa.id] ?? false,
+                                        activeColor: const Color(0xFF7B1FA2),
+                                        checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                        onChanged: isTerisi ? null : (bool? value) {
+                                          setSheetState(() {
+                                            selectedDesa[desa.id] = value ?? false;
+                                          });
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
                     ],
                   ),
                 ),
@@ -611,32 +691,88 @@ class PenggunaAdminViewState extends State<PenggunaAdminView> {
                           .map((e) => e.key)
                           .toList();
 
-                      if (penyuluhToEdit == null && (name.isEmpty || username.isEmpty || email.isEmpty || password.isEmpty)) {
-                        _showSnackBar('Harap lengkapi field yang wajib (Nama, Username, Email, Password)', isSuccess: false);
+                      // Basic input cleaning
+                      final cleanedName = name.trim();
+                      final cleanedUsername = username.trim();
+                      final cleanedEmail = email.trim();
+                      final cleanedPhone = phone.trim();
+                      final cleanedPassword = password;
+
+                      // 1. Check empty fields
+                      if (penyuluhToEdit == null) {
+                        if (cleanedName.isEmpty || cleanedUsername.isEmpty || cleanedEmail.isEmpty || cleanedPassword.isEmpty) {
+                          _showErrorDialog('Harap lengkapi field yang wajib (Nama, Username, Email, Password)');
+                          return;
+                        }
+                      } else {
+                        if (cleanedName.isEmpty || cleanedUsername.isEmpty || cleanedEmail.isEmpty) {
+                          _showErrorDialog('Harap lengkapi field yang wajib (Nama, Username, Email)');
+                          return;
+                        }
+                      }
+
+                      // 2. Validate Name
+                      if (cleanedName.length < 3) {
+                        _showErrorDialog('Nama lengkap minimal harus 3 karakter');
                         return;
-                      } else if (penyuluhToEdit != null && (name.isEmpty || username.isEmpty || email.isEmpty)) {
-                        _showSnackBar('Harap lengkapi field yang wajib (Nama, Username, Email)', isSuccess: false);
+                      }
+
+                      // 3. Validate Username
+                      if (cleanedUsername.contains(' ')) {
+                        _showErrorDialog('Username tidak boleh mengandung spasi');
+                        return;
+                      }
+                      if (cleanedUsername.length < 4) {
+                        _showErrorDialog('Username minimal harus 4 karakter');
+                        return;
+                      }
+
+                      // 4. Validate Email format
+                      final emailRegExp = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+                      if (!emailRegExp.hasMatch(cleanedEmail)) {
+                        _showErrorDialog('Format email tidak valid (contoh: nama@gmail.com)');
+                        return;
+                      }
+
+                      // 5. Validate Phone Number (If provided)
+                      if (cleanedPhone.isNotEmpty) {
+                        final phoneRegExp = RegExp(r'^\+?[0-9]{9,15}$');
+                        if (!phoneRegExp.hasMatch(cleanedPhone)) {
+                          _showErrorDialog('Nomor handphone harus berupa angka dengan panjang 9-15 digit (opsional diawali +)');
+                          return;
+                        }
+                      }
+
+                      // 6. Validate Password Length (Only for new penyuluh)
+                      if (penyuluhToEdit == null && cleanedPassword.length < 6) {
+                        _showErrorDialog('Password minimal harus 6 karakter');
+                        return;
+                      }
+
+                      // 7. Validate Village Selection
+                      if (villages.isEmpty) {
+                        _showErrorDialog('Harap pilih minimal satu desa binaan');
                         return;
                       }
 
                       String? errorMessage;
                       if (penyuluhToEdit == null) {
                         errorMessage = await AdminService.createPenyuluh(
-                          name: name,
-                          username: username,
-                          email: email,
-                          password: password,
-                          noHp: phone,
+                          name: cleanedName,
+                          username: cleanedUsername,
+                          email: cleanedEmail,
+                          password: cleanedPassword,
+                          noHp: cleanedPhone,
                           villages: villages,
                         );
                       } else {
                         errorMessage = await AdminService.updatePenyuluh(
                           id: penyuluhToEdit.id,
-                          name: name,
-                          username: username,
-                          email: email,
+                          name: cleanedName,
+                          username: cleanedUsername,
+                          email: cleanedEmail,
                           password: '',
-                          noHp: phone,
+                          noHp: cleanedPhone,
                           villages: villages,
                         );
                       }
@@ -647,7 +783,7 @@ class PenggunaAdminViewState extends State<PenggunaAdminView> {
                         _fetchPenyuluh();
                         _fetchDesaForPenyuluh();
                       } else {
-                        _showSnackBar(errorMessage, isSuccess: false);
+                        _showErrorDialog(errorMessage);
                       }
                     },
                     style: ElevatedButton.styleFrom(

@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class AuthService {
   // Ganti dengan IP/URL Laravel Anda
-  static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'http://127.0.0.1:8000';
   static const String loginEndpoint = '$baseUrl/api/login';
 
   // Mapping role_id ke role name
@@ -194,6 +194,69 @@ class AuthService {
       _userId = null;
       _userVillage = null;
       return false;
+    }
+  }
+  // Forgot Password: Step 1 - Send OTP to email
+  static Future<Map<String, dynamic>> sendOtpForPasswordReset(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/request-otp-for-reset'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'email': email}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'status': 'error', 'message': 'Gagal terhubung ke server: $e'};
+    }
+  }
+
+  // Forgot Password: Step 2 - Verify OTP
+  static Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/verify-otp'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'email': email,
+          'otp': otp,
+        }),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'status': 'error', 'message': 'Gagal terhubung ke server: $e'};
+    }
+  }
+
+  // Forgot Password: Step 3 - Reset Password
+  static Future<Map<String, dynamic>> resetPassword({
+    required String email,
+    required String otp,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/reset-password-with-otp'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'email': email,
+          'otp': otp,
+          'password': password,
+          'password_confirmation': passwordConfirmation,
+        }),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'status': 'error', 'message': 'Gagal terhubung ke server: $e'};
     }
   }
 }

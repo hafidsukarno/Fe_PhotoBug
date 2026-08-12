@@ -53,7 +53,7 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
 
         // Map data
         final hama = detection.getHighestConfidenceResult()?.pestName ?? 'Tidak Terdeteksi';
-        final image = 'http://localhost:8000/api/image/${detection.imagePath}';
+        final image = 'http://127.0.0.1:8000/api/image/${detection.imagePath}';
         
         final date = _formatDate(detection.detectedAt);
         final status = detection.status == 'pending' ? 'Menunggu' : 'Selesai';
@@ -296,26 +296,60 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
-                                            const SizedBox(width: 8),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: [
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFF7B1FA2).withValues(alpha: 0.08),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(
-                                                  color: const Color(0xFF7B1FA2).withValues(alpha: 0.15),
-                                                  width: 1,
-                                                ),
+                                                color: const Color(0xFFFFF3E0),
+                                                borderRadius: BorderRadius.circular(6),
                                               ),
                                               child: Text(
-                                                jumlahHama,
+                                                'Jumlah: $jumlahHama',
                                                 style: const TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: Color(0xFF7B1FA2),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFFE65100),
                                                 ),
                                               ),
                                             ),
+                                            if (detection.ricePhase != null)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFE1F5FE),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  'Fase: ${_getDisplayRicePhase(detection.ricePhase)}',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF0288D1),
+                                                  ),
+                                                ),
+                                              ),
+                                            if (detection.hazardLevel != null)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: _getHazardColor(detection.hazardLevel).withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  'Status: ${detection.hazardLevel!.toUpperCase()}',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: _getHazardColor(detection.hazardLevel),
+                                                  ),
+                                                ),
+                                              ),
                                           ],
                                         ),
                                         const SizedBox(height: 8),
@@ -362,6 +396,7 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Lokasi Desa Binaan
                             Row(
                               children: [
                                 Container(
@@ -370,7 +405,47 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
                                     color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.location_on_rounded, color: Color(0xFF9C27B0), size: 18),
+                                  child: const Icon(Icons.home_work_rounded, color: Color(0xFF9C27B0), size: 18),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Lokasi Desa Binaan',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        detection.villageName ?? 'Tidak Diketahui',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF2C3E50),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Container(height: 1, color: Colors.grey.shade100),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE53935).withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.location_on_rounded, color: Color(0xFFE53935), size: 18),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -386,14 +461,54 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 2),
-                                      Text(
-                                        detection.villageName != null ? 'Ds. ${detection.villageName}' : 'Lokasi Tidak Diketahui',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF2C3E50),
-                                        ),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              detection.gpsAddress != null && detection.gpsAddress!.isNotEmpty
+                                                  ? detection.gpsAddress!
+                                                  : (detection.villageName != null ? 'Ds. ${detection.villageName}' : 'Lokasi Tidak Diketahui'),
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF2C3E50),
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (detection.latitude != null && detection.longitude != null) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE8F5E9),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'GPS',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF2E7D32),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
+                                      if (detection.latitude != null && detection.longitude != null) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Koordinat: ${detection.latitude}, ${detection.longitude}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -484,10 +599,10 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      _buildSectionTitle('Rekomendasi Awal AI', Icons.auto_awesome_rounded),
+                      _buildSectionTitle('Rekomendasi Awal Penanganan', Icons.auto_awesome_rounded),
                       const SizedBox(height: 8),
                       
-                      // REKOMENDASI AI CARD
+                      // REKOMENDASI PENANGANAN CARD
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(20),
@@ -750,5 +865,31 @@ class _RiwayatDetailScreenState extends State<RiwayatDetailScreen> {
   String _formatDate(DateTime date) {
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Color _getHazardColor(String? level) {
+    switch (level?.toLowerCase()) {
+      case 'tidak bahaya':
+        return const Color(0xFF2E7D32);
+      case 'bahaya':
+        return const Color(0xFFE65100);
+      case 'sangat bahaya':
+        return const Color(0xFFC62828);
+      default:
+        return Colors.grey.shade600;
+    }
+  }
+
+  String _getDisplayRicePhase(String? phase) {
+    switch (phase?.toLowerCase()) {
+      case 'vegetatif':
+        return 'Vegetatif (< 40 HST)';
+      case 'generatif':
+        return 'Generatif (~40-60 HST)';
+      case 'pematangan':
+        return 'Pematangan (~60-90+ HST)';
+      default:
+        return phase ?? '-';
+    }
   }
 }

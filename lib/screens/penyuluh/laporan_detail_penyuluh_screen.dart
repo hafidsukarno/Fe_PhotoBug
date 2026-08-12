@@ -25,16 +25,57 @@ class _LaporanDetailPenyuluhScreenState extends State<LaporanDetailPenyuluhScree
   String? _error;
   final TextEditingController _recommendationController = TextEditingController();
 
+  final List<String> _quickTemplates = [
+    'Ambil pestisida gratis di Kantor BPP Karang Tengah',
+    'Segera lakukan penyemprotan insektisida secara merata',
+    'Keringkan sawah sementara (pengairan berselang)',
+    'Kurangi penggunaan pupuk Urea (pupuk Nitrogen berlebih)',
+    'Lakukan monitoring populasi secara rutin setiap minggu',
+    'Gunakan agens hayati / insektisida nabati (ramah lingkungan)',
+  ];
+
   @override
   void initState() {
     super.initState();
     _loadDetail();
+    _recommendationController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _recommendationController.removeListener(_onTextChanged);
     _recommendationController.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    setState(() {});
+  }
+
+  bool _isTemplateSelected(String template) {
+    return _recommendationController.text.contains(template);
+  }
+
+  void _toggleTemplate(String template) {
+    String currentText = _recommendationController.text.trim();
+    if (_isTemplateSelected(template)) {
+      // Remove the template
+      currentText = currentText.replaceAll(template, '').trim();
+      // Clean up multiple newlines
+      currentText = currentText.replaceAll(RegExp(r'\n\s*\n'), '\n');
+      _recommendationController.text = currentText;
+    } else {
+      // Add the template
+      if (currentText.isEmpty) {
+        _recommendationController.text = template;
+      } else {
+        _recommendationController.text = '$currentText\n$template';
+      }
+    }
+    // Move cursor to the end
+    _recommendationController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _recommendationController.text.length),
+    );
   }
 
   Future<void> _loadDetail() async {
@@ -517,20 +558,80 @@ class _LaporanDetailPenyuluhScreenState extends State<LaporanDetailPenyuluhScree
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF7B1FA2)),
+                    const Icon(Icons.home_work_outlined, size: 14, color: Color(0xFF7B1FA2)),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        _detail!.villageName,
+                        'Desa Binaan: ${_detail!.villageName}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey.shade500,
-                          height: 1.3,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
                   ],
                 ),
+                if (_detail!.gpsAddress != null && _detail!.gpsAddress!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFFE53935)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Lokasi GPS: ${_detail!.gpsAddress!}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE8F5E9),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'GPS',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF2E7D32),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_detail!.latitude != null && _detail!.longitude != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Koordinat: ${_detail!.latitude}, ${_detail!.longitude}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade500,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -673,13 +774,56 @@ class _LaporanDetailPenyuluhScreenState extends State<LaporanDetailPenyuluhScree
               ),
             ],
           ),
+          if (_detail!.ricePhase != null || _detail!.hazardLevel != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (_detail!.ricePhase != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE1F5FE),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFB3E5FC), width: 0.8),
+                    ),
+                    child: Text(
+                      'Fase: ${_getDisplayRicePhase(_detail!.ricePhase)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0288D1),
+                      ),
+                    ),
+                  ),
+                if (_detail!.hazardLevel != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _getHazardColor(_detail!.hazardLevel).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _getHazardColor(_detail!.hazardLevel).withValues(alpha: 0.25), width: 0.8),
+                    ),
+                    child: Text(
+                      'Status: ${_detail!.hazardLevel!.toUpperCase()}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: _getHazardColor(_detail!.hazardLevel),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 20),
           Divider(color: Colors.grey.shade100, thickness: 1.5),
           const SizedBox(height: 20),
 
-          // Rekomendasi AI
+          // Rekomendasi Penanganan
           Text(
-            'REKOMENDASI AI',
+            'REKOMENDASI PENANGANAN',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -751,8 +895,64 @@ class _LaporanDetailPenyuluhScreenState extends State<LaporanDetailPenyuluhScree
             ],
           ),
           const SizedBox(height: 20),
+          if (isWaiting) ...[
+            const Text(
+              'Rekomendasi Cepat (Klik untuk memilih)',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF757575),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8.0,
+              runSpacing: 8.0,
+              children: _quickTemplates.map((template) {
+                final isSelected = _isTemplateSelected(template);
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _toggleTemplate(template),
+                    borderRadius: BorderRadius.circular(20),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF7B1FA2) : const Color(0xFFF3E5F5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF7B1FA2) : const Color(0xFFBA68C8).withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isSelected) ...[
+                            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
+                            const SizedBox(width: 6),
+                          ],
+                          Flexible(
+                            child: Text(
+                              template,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isSelected ? Colors.white : const Color(0xFF4A148C),
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+          ],
           const Text(
-            'Rekomendasi Penanganan',
+            'Catatan Rekomendasi Penanganan',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -908,5 +1108,31 @@ class _LaporanDetailPenyuluhScreenState extends State<LaporanDetailPenyuluhScree
         ),
       ),
     );
+  }
+
+  Color _getHazardColor(String? level) {
+    switch (level?.toLowerCase()) {
+      case 'tidak bahaya':
+        return const Color(0xFF2E7D32);
+      case 'bahaya':
+        return const Color(0xFFE65100);
+      case 'sangat bahaya':
+        return const Color(0xFFC62828);
+      default:
+        return Colors.grey.shade600;
+    }
+  }
+
+  String _getDisplayRicePhase(String? phase) {
+    switch (phase?.toLowerCase()) {
+      case 'vegetatif':
+        return 'Vegetatif (< 40 HST)';
+      case 'generatif':
+        return 'Generatif (~40-60 HST)';
+      case 'pematangan':
+        return 'Pematangan (~60-90+ HST)';
+      default:
+        return phase ?? '-';
+    }
   }
 }

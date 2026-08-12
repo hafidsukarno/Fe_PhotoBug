@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:fe_photobug/screens/admin/kelola_desa_admin_view.dart';
 import 'package:fe_photobug/screens/admin/pengguna_admin_view.dart';
+import 'package:fe_photobug/screens/admin/kelola_artikel_admin_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/admin_service.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/utils/dialog_utils.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -18,22 +20,58 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _currentIndex = 0;
   final GlobalKey<KelolaDesaAdminViewState> _kelolaDesaKey = GlobalKey<KelolaDesaAdminViewState>();
   final GlobalKey<PenggunaAdminViewState> _penggunaKey = GlobalKey<PenggunaAdminViewState>();
+  final GlobalKey<KelolaArtikelAdminViewState> _kelolaArtikelKey = GlobalKey<KelolaArtikelAdminViewState>();
   bool _isLoading = true;
   AdminDashboardData? _dashboardStats;
   VillagesReportData? _villagesReport;
   PestStatisticsData? _pestStats;
 
+  DateTime? _selectedStartMonth;
+  DateTime? _selectedEndMonth;
+
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _selectedStartMonth = DateTime(now.year, now.month, 1);
+    _selectedEndMonth = DateTime(now.year, now.month, 1);
     _loadData();
   }
 
+  List<DateTime> _generateMonthsList() {
+    final list = <DateTime>[];
+    final now = DateTime.now();
+    for (int i = 0; i < 24; i++) {
+      list.add(DateTime(now.year, now.month - i, 1));
+    }
+    return list;
+  }
+
+  String _formatMonthName(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return "${months[dt.month - 1]} ${dt.year}";
+  }
+
   Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    String? startStr;
+    String? endStr;
+
+    if (_selectedStartMonth != null) {
+      startStr = "${_selectedStartMonth!.year}-${_selectedStartMonth!.month.toString().padLeft(2, '0')}-01";
+    }
+    if (_selectedEndMonth != null) {
+      final lastDay = DateTime(_selectedEndMonth!.year, _selectedEndMonth!.month + 1, 0).day;
+      endStr = "${_selectedEndMonth!.year}-${_selectedEndMonth!.month.toString().padLeft(2, '0')}-$lastDay";
+    }
+
     final results = await Future.wait([
-      AdminService.getDashboardStats(),
-      AdminService.getVillagesReport(),
-      AdminService.getPestStatistics(),
+      AdminService.getDashboardStats(dateFrom: startStr, dateTo: endStr),
+      AdminService.getVillagesReport(dateFrom: startStr, dateTo: endStr),
+      AdminService.getPestStatistics(dateFrom: startStr, dateTo: endStr),
     ]);
     
     if (mounted) {
@@ -58,6 +96,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _buildDasborView(topPadding),
           KelolaDesaAdminView(key: _kelolaDesaKey, topPadding: topPadding),
           PenggunaAdminView(key: _penggunaKey, topPadding: topPadding),
+          KelolaArtikelAdminView(key: _kelolaArtikelKey, topPadding: topPadding),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),
@@ -295,44 +334,248 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                   const SizedBox(height: 16),
+ 
+                   // Status chip
+                   Container(
+                     padding: const EdgeInsets.symmetric(
+                         horizontal: 14, vertical: 8),
+                     decoration: BoxDecoration(
+                       color: Colors.white.withValues(alpha: 0.13),
+                       borderRadius: BorderRadius.circular(20),
+                       border: Border.all(
+                         color: Colors.white.withValues(alpha: 0.2),
+                         width: 1,
+                       ),
+                     ),
+                     child: Row(
+                       mainAxisSize: MainAxisSize.min,
+                       children: [
+                         Container(
+                           width: 8,
+                           height: 8,
+                           decoration: const BoxDecoration(
+                             color: Color(0xFF69F0AE),
+                             shape: BoxShape.circle,
+                           ),
+                         ),
+                         const SizedBox(width: 8),
+                         Text(
+                           'Semua sistem berjalan normal • Update 2 mnt lalu',
+                           style: TextStyle(
+                             fontSize: 11.5,
+                             color: Colors.white.withValues(alpha: 0.9),
+                             fontWeight: FontWeight.w500,
+                           ),
+                         ),
+                       ],
+                     ),
+                   ),
+                   const SizedBox(height: 12),
 
-                  // Status chip
+                  // Month Filter Bar
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: Colors.white.withValues(alpha: 0.12),
                         width: 1,
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF69F0AE),
-                            shape: BoxShape.circle,
-                          ),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 18),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Periode Laporan',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_selectedStartMonth != null || _selectedEndMonth != null)
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedStartMonth = null;
+                                    _selectedEndMonth = null;
+                                  });
+                                  _loadData();
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(Icons.refresh_rounded, color: Colors.white, size: 12),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Reset',
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Semua sistem berjalan normal • Update 2 mnt lalu',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontWeight: FontWeight.w500,
-                          ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                height: 42,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<DateTime>(
+                                    hint: Text(
+                                      'Dari Bulan',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white.withValues(alpha: 0.6),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    value: _selectedStartMonth,
+                                    isExpanded: true,
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    dropdownColor: const Color(0xFF6A1B9A),
+                                    items: _generateMonthsList().map((dt) {
+                                      return DropdownMenuItem<DateTime>(
+                                        value: dt,
+                                        child: Text(
+                                          _formatMonthName(dt),
+                                          style: const TextStyle(
+                                            fontSize: 12.5,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _selectedStartMonth = val;
+                                        // Ensure start month is before or equal to end month
+                                        if (_selectedEndMonth != null && val != null && val.isAfter(_selectedEndMonth!)) {
+                                          _selectedEndMonth = val;
+                                        }
+                                      });
+                                      _loadData();
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Icon(
+                                Icons.trending_flat_rounded,
+                                color: Colors.white70,
+                                size: 16,
+                              ),
+                            ),
+                            Expanded(
+                              child: Container(
+                                height: 42,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<DateTime>(
+                                    hint: Text(
+                                      'Sampai Bulan',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white.withValues(alpha: 0.6),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    value: _selectedEndMonth,
+                                    isExpanded: true,
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    dropdownColor: const Color(0xFF6A1B9A),
+                                    items: _generateMonthsList().map((dt) {
+                                      return DropdownMenuItem<DateTime>(
+                                        value: dt,
+                                        child: Text(
+                                          _formatMonthName(dt),
+                                          style: const TextStyle(
+                                            fontSize: 12.5,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _selectedEndMonth = val;
+                                        // Ensure end month is after or equal to start month
+                                        if (_selectedStartMonth != null && val != null && val.isBefore(_selectedStartMonth!)) {
+                                          _selectedStartMonth = val;
+                                        }
+                                      });
+                                      _loadData();
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                   const SizedBox(height: 20),
 
                   // Stats Grid
                   GridView.count(
@@ -386,6 +629,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ---- DOWNLOAD REPORT BUTTON ----
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _showDownloadFilterDialog();
+                    },
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Download Laporan Excel'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7B1FA2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 4,
+                      shadowColor: const Color(0xFF7B1FA2).withValues(alpha: 0.3),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
                 // ---- CAKUPAN DESA BINAAN ----
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -445,66 +715,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 _buildDistribusiHamaChart(),
                 const SizedBox(height: 24),
 
-                // ---- AKTIVITAS TERBARU ----
-                const Text(
-                  'Aktivitas Sistem Terbaru',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1A1A2E),
-                  ),
-                ),
-                const SizedBox(height: 14),
 
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const _ActivityItem(
-                        icon: Icons.add_photo_alternate_rounded,
-                        color: Color(0xFF7B1FA2),
-                        title: 'Laporan baru dikirim',
-                        subtitle: 'Budi Santoso • Ds. Sukamaju',
-                        time: '2 mnt lalu',
-                      ),
-                      _divider(),
-                      const _ActivityItem(
-                        icon: Icons.person_add_rounded,
-                        color: Color(0xFF1565C0),
-                        title: 'Pengguna baru terdaftar',
-                        subtitle: 'Ani Rahayu • Petani',
-                        time: '15 mnt lalu',
-                      ),
-                      _divider(),
-                      const _ActivityItem(
-                        icon: Icons.check_circle_rounded,
-                        color: Color(0xFF2E7D32),
-                        title: 'Laporan diverifikasi',
-                        subtitle: 'Irwan Setiawan • Penyuluh',
-                        time: '1 jam lalu',
-                      ),
-                      _divider(),
-                      const _ActivityItem(
-                        icon: Icons.warning_rounded,
-                        color: Color(0xFFF57C00),
-                        title: 'Hama kritis terdeteksi',
-                        subtitle: 'Wereng Coklat • Ds. Ciawi Lor',
-                        time: '3 jam lalu',
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -635,6 +846,147 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  // ==================== FILTER DOWNLOAD EXCEL ====================
+  void _showDownloadFilterDialog() {
+    DateTime startDate = DateTime.now().subtract(const Duration(days: 30));
+    DateTime endDate = DateTime.now();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('Filter Laporan Excel', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1A1A2E))),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Dari Tanggal:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF4A148C))),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: startDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: const ColorScheme.light(
+                                primary: Color(0xFF7B1FA2),
+                                onPrimary: Colors.white,
+                                onSurface: Color(0xFF1A1A2E),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null) setState(() => startDate = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        border: Border.all(color: Colors.grey.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('${startDate.day.toString().padLeft(2, '0')}/${startDate.month.toString().padLeft(2, '0')}/${startDate.year}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF7B1FA2)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('Sampai Tanggal:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF4A148C))),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: endDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: const ColorScheme.light(
+                                primary: Color(0xFF7B1FA2),
+                                onPrimary: Colors.white,
+                                onSurface: Color(0xFF1A1A2E),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null) setState(() => endDate = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        border: Border.all(color: Colors.grey.shade200),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('${endDate.day.toString().padLeft(2, '0')}/${endDate.month.toString().padLeft(2, '0')}/${endDate.year}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF7B1FA2)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Batal', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    final dateFrom = '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
+                    final dateTo = '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
+                    final url = Uri.parse('${AdminService.baseUrl}/api/admin/download-statistics-report?token=${AuthService.authToken}&date_from=$dateFrom&date_to=$dateTo');
+                    try {
+                      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal membuka URL unduhan')));
+                        }
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Terjadi kesalahan saat mengunduh: $e')));
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7B1FA2),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Download', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
 
 
 
@@ -731,6 +1083,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               _buildNavItem(Icons.home_rounded, 'Dasbor', 0),
               _buildNavItem(Icons.location_city_rounded, 'Kelola Desa', 1),
               _buildNavItem(Icons.people_alt_outlined, 'Pengguna', 2),
+              _buildNavItem(Icons.article_rounded, 'Artikel', 3),
             ],
           ),
         ),
@@ -750,6 +1103,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             _kelolaDesaKey.currentState?.silentRefresh();
           } else if (index == 2) {
             _penggunaKey.currentState?.silentRefresh();
+          } else if (index == 3) {
+            _kelolaArtikelKey.currentState?.silentRefresh();
           }
         });
       },
@@ -783,12 +1138,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  static Widget _divider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Divider(color: Colors.grey.shade100, height: 1, thickness: 1),
-    );
-  }
+
 }
 
 // =========================================================
@@ -912,45 +1262,94 @@ class _DesaItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percent = (progress * 100).toInt();
+    
+    // Tentukan tingkat bahaya berdasarkan jumlah total hama yang diidentifikasi
+    String status = 'Tidak Bahaya';
+    Color statusColor = const Color(0xFF2E7D32); // Green
+    IconData statusIcon = Icons.check_circle_outline_rounded;
+
+    if (totalHama >= 15) {
+      status = 'Sangat Bahaya';
+      statusColor = const Color(0xFFC62828); // Red
+      statusIcon = Icons.gpp_bad_rounded;
+    } else if (totalHama >= 5) {
+      status = 'Bahaya';
+      statusColor = const Color(0xFFE65100); // Orange
+      statusIcon = Icons.warning_amber_rounded;
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Text(
                 nama,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A2E),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _Badge(
-                  icon: Icons.description_outlined,
-                  label: '$jumlahLaporan laporan',
-                  color: color,
-                ),
-                const SizedBox(width: 6),
-                _Badge(
-                  icon: Icons.bug_report_outlined,
-                  label: '$totalHama hama',
-                  color: const Color(0xFFF57C00),
-                ),
-              ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: statusColor.withValues(alpha: 0.25), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(statusIcon, color: statusColor, size: 13),
+                  const SizedBox(width: 4),
+                  Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.description_outlined, size: 14, color: Colors.grey.shade500),
+            const SizedBox(width: 4),
+            Text(
+              '$jumlahLaporan Laporan',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Icon(Icons.bug_report_outlined, size: 14, color: Colors.grey.shade500),
+            const SizedBox(width: 4),
+            Text(
+              '$totalHama Hama Terdeteksi',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -958,7 +1357,7 @@ class _DesaItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: progress,
-                  minHeight: 8,
+                  minHeight: 6,
                   backgroundColor: color.withValues(alpha: 0.12),
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                 ),
@@ -968,9 +1367,9 @@ class _DesaItem extends StatelessWidget {
             Text(
               '$percent%',
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: color,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.grey.shade600,
               ),
             ),
           ],
@@ -980,109 +1379,4 @@ class _DesaItem extends StatelessWidget {
   }
 }
 
-class _Badge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
 
-  const _Badge({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActivityItem extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final String time;
-
-  const _ActivityItem({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A2E),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            time,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade400,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

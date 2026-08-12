@@ -21,8 +21,8 @@ class LaporanHasilScreen extends StatelessWidget {
     // Debug image loading
     print('================== IMAGE DEBUG ==================');
     print('📸 Image Path: ${detection.imagePath}');
-    print('🔗 API URL: http://localhost:8000/api/image/${detection.imagePath}');
-    print('🌐 Base URL: http://localhost:8000');
+    print('🔗 API URL: http://127.0.0.1:8000/api/image/${detection.imagePath}');
+    print('🌐 Base URL: http://127.0.0.1:8000');
     print('📁 Storage endpoint: /api/image/');
     print('===============================================');
     
@@ -298,7 +298,7 @@ class LaporanHasilScreen extends StatelessWidget {
                                 height: 160,
                                 width: double.infinity,
                                 child: Image.network(
-                                  'http://localhost:8000/api/image/${detection.imagePath}',
+                                  'http://127.0.0.1:8000/api/image/${detection.imagePath}',
                                   fit: BoxFit.cover,
                                   loadingBuilder: (context, child, loadingProgress) {
                                     if (loadingProgress == null) return child;
@@ -311,7 +311,7 @@ class LaporanHasilScreen extends StatelessWidget {
                                     );
                                   },
                                   errorBuilder: (context, error, stackTrace) {
-                                    final imageUrl = 'http://localhost:8000/storage/${detection.imagePath}';
+                                    final imageUrl = 'http://127.0.0.1:8000/storage/${detection.imagePath}';
                                     print('❌ IMAGE LOAD ERROR ❌');
                                     print('Error: $error');
                                     print('Image path: ${detection.imagePath}');
@@ -460,20 +460,58 @@ class LaporanHasilScreen extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFF3E0),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        'Jumlah Hama: ${_getDisplayPestCount()} Ekor',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFFE65100),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFF3E0),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            'Jumlah Hama: ${_getDisplayPestCount()} Ekor',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFFE65100),
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                        if (detection.ricePhase != null)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE1F5FE),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              'Fase: ${_getDisplayRicePhase(detection.ricePhase)}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF0288D1),
+                                              ),
+                                            ),
+                                          ),
+                                        if (detection.hazardLevel != null)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: _getHazardColor(detection.hazardLevel).withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              'Status: ${detection.hazardLevel!.toUpperCase()}',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                color: _getHazardColor(detection.hazardLevel),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                     const SizedBox(height: 12),
                                     Row(
@@ -533,6 +571,47 @@ class LaporanHasilScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        // Lokasi Desa Binaan
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.home_work_rounded, color: Color(0xFF9C27B0), size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Lokasi Desa Binaan',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    detection.villageName ?? 'Tidak Diketahui',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF2C3E50),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Container(height: 1, color: Colors.grey.shade200),
+                        const SizedBox(height: 16),
                         Row(
                           children: [
                             Container(
@@ -558,33 +637,53 @@ class LaporanHasilScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 2),
                                   Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      Text(
-                                        detection.villageName ?? 'Lokasi Tidak Diketahui',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF2C3E50),
+                                      Expanded(
+                                        child: Text(
+                                          detection.gpsAddress != null && detection.gpsAddress!.isNotEmpty
+                                              ? detection.gpsAddress!
+                                              : (detection.villageName ?? 'Lokasi Tidak Diketahui'),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF2C3E50),
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE8F5E9),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: const Text(
-                                          'GPS',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                            color: Color(0xFF2E7D32),
+                                      if (detection.latitude != null && detection.longitude != null) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE8F5E9),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Text(
+                                            'GPS',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF2E7D32),
+                                            ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
+                                  if (detection.latitude != null && detection.longitude != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Koordinat: ${detection.latitude}, ${detection.longitude}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -703,7 +802,7 @@ class LaporanHasilScreen extends StatelessWidget {
                                 color: Color(0xFF7B1FA2), size: 20),
                             const SizedBox(width: 8),
                             const Text(
-                              'Rekomendasi AI',
+                              'Rekomendasi Penanganan',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
@@ -845,5 +944,31 @@ class LaporanHasilScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _getHazardColor(String? level) {
+    switch (level?.toLowerCase()) {
+      case 'tidak bahaya':
+        return const Color(0xFF2E7D32);
+      case 'bahaya':
+        return const Color(0xFFE65100);
+      case 'sangat bahaya':
+        return const Color(0xFFC62828);
+      default:
+        return Colors.grey.shade600;
+    }
+  }
+
+  String _getDisplayRicePhase(String? phase) {
+    switch (phase?.toLowerCase()) {
+      case 'vegetatif':
+        return 'Vegetatif (< 40 HST)';
+      case 'generatif':
+        return 'Generatif (~40-60 HST)';
+      case 'pematangan':
+        return 'Pematangan (~60-90+ HST)';
+      default:
+        return phase ?? '-';
+    }
   }
 }

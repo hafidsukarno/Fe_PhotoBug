@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:fe_photobug/screens/penyuluh/laporan_penyuluh_view.dart';
 import 'package:fe_photobug/screens/penyuluh/notifikasi_penyuluh_view.dart';
+import 'package:fe_photobug/screens/penyuluh/artikel_penyuluh_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/penyuluh_service.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/utils/dialog_utils.dart';
+import 'package:fe_photobug/services/admin_service.dart';
 
 class PenyuluhDashboardScreen extends StatefulWidget {
   const PenyuluhDashboardScreen({super.key});
@@ -18,35 +20,76 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
   int _currentIndex = 0;
   int _laporanInitialTab = 0;
   GlobalKey<LaporanPenyuluhViewState> _laporanKey = GlobalKey<LaporanPenyuluhViewState>();
+  final GlobalKey<ArtikelPenyuluhViewState> _artikelKey = GlobalKey<ArtikelPenyuluhViewState>();
   bool _isLoadingStatus = true;
   bool _isLoadingTrend = true;
   String _villageName = 'Memuat...';
   late PenyuluhReportStatusResponse _reportStatus;
   late PestTrendResponse _pestTrend;
 
+  DateTime? _selectedStartMonth;
+  DateTime? _selectedEndMonth;
+  List<VillageReportItem> _villagesList = [];
+
+  List<DateTime> _generateMonthsList() {
+    final list = <DateTime>[];
+    final now = DateTime.now();
+    for (int i = 0; i < 24; i++) {
+      list.add(DateTime(now.year, now.month - i, 1));
+    }
+    return list;
+  }
+
+  String _formatMonthName(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return "${months[dt.month - 1]} ${dt.year}";
+  }
+
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _selectedStartMonth = DateTime(now.year, now.month, 1);
+    _selectedEndMonth = DateTime(now.year, now.month, 1);
     _loadData();
   }
 
   Future<void> _loadData() async {
-    final status = await PenyuluhService.getReportStatus();
-    final trend = await PenyuluhService.getPestTrend();
-    final villagesData = await PenyuluhService.getVillages();
+    setState(() {
+      _isLoadingStatus = true;
+      _isLoadingTrend = true;
+    });
+
+    String? startStr;
+    String? endStr;
+
+    if (_selectedStartMonth != null) {
+      startStr = "${_selectedStartMonth!.year}-${_selectedStartMonth!.month.toString().padLeft(2, '0')}-01";
+    }
+    if (_selectedEndMonth != null) {
+      final lastDay = DateTime(_selectedEndMonth!.year, _selectedEndMonth!.month + 1, 0).day;
+      endStr = "${_selectedEndMonth!.year}-${_selectedEndMonth!.month.toString().padLeft(2, '0')}-$lastDay";
+    }
+
+    final status = await PenyuluhService.getReportStatus(dateFrom: startStr, dateTo: endStr);
+    final trend = await PenyuluhService.getPestTrend(dateFrom: startStr, dateTo: endStr);
+    final villagesData = await PenyuluhService.getVillages(dateFrom: startStr, dateTo: endStr);
     
     String villageText = 'Desa Tidak Diketahui';
     if (villagesData.success && villagesData.data.isNotEmpty) {
-      villageText = 'Desa ${villagesData.data.join(", ")}';
+      villageText = 'Desa ${villagesData.data.map((e) => e.villageName).join(", ")}';
     }
 
-    setState(() {
-      _reportStatus = status;
-      _pestTrend = trend;
-      _villageName = villageText;
-      _isLoadingStatus = false;
-      _isLoadingTrend = false;
-    });
+    if (mounted) {
+      setState(() {
+        _reportStatus = status;
+        _pestTrend = trend;
+        _villageName = villageText;
+        _villagesList = villagesData.data;
+        _isLoadingStatus = false;
+        _isLoadingTrend = false;
+      });
+    }
   }
 
   @override
@@ -59,7 +102,14 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
         index: _currentIndex,
         children: [
           _buildBerandaView(topPadding),
-          LaporanPenyuluhView(key: _laporanKey, topPadding: topPadding, initialTabIndex: _laporanInitialTab),
+          LaporanPenyuluhView(
+            key: _laporanKey, 
+            topPadding: topPadding, 
+            initialTabIndex: _laporanInitialTab,
+            selectedStartMonth: _selectedStartMonth,
+            selectedEndMonth: _selectedEndMonth,
+          ),
+          ArtikelPenyuluhView(key: _artikelKey, topPadding: topPadding),
           NotifikasiPenyuluhView(topPadding: topPadding),
         ],
       ),
@@ -78,6 +128,8 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildPeriodFilterCard(),
+                  const SizedBox(height: 24),
                   const Text(
                     'Status Laporan',
                     style: TextStyle(
@@ -90,6 +142,54 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                   const SizedBox(height: 12),
                   _buildStatsRow(),
                   const SizedBox(height: 24),
+                  if (!_isLoadingStatus && _villagesList.isNotEmpty) ...[
+                    const Text(
+                      'Cakupan Desa Binaan',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF4A148C),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: _villagesList.map((desa) {
+                          final colors = [
+                            const Color(0xFF7B1FA2),
+                            const Color(0xFF9C27B0),
+                            const Color(0xFFAB47BC),
+                            const Color(0xFFCE93D8),
+                          ];
+                          final index = _villagesList.indexOf(desa);
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: index == _villagesList.length - 1 ? 0 : 18),
+                            child: _DesaItem(
+                              nama: desa.villageName,
+                              jumlahLaporan: desa.totalReports,
+                              totalHama: desa.totalPestsDetected,
+                              progress: (desa.totalReports > 0 ? (desa.totalReports / 20).clamp(0.0, 1.0) : 0.0).toDouble(),
+                              color: colors[index % colors.length],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                   _buildChartCard(),
                   const SizedBox(height: 24),
                   if (!_isLoadingStatus && _reportStatus.success && _reportStatus.waitingVerification > 0) ...[
@@ -106,32 +206,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                     _buildAlertCard(),
                     const SizedBox(height: 28),
                   ],
-                  const Text(
-                    'Info Hama Terkini',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF4A148C),
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildNewsItem(
-                    title: 'Waspada Hama Wereng Coklat',
-                    description: 'Populasi wereng coklat meningkat tajam di musim hujan. Segera berikan rekomendasi pengendalian ke petani.',
-                    icon: Icons.newspaper_rounded,
-                    iconColor: const Color(0xFFE65100),
-                    date: '18 Mei 2026',
-                  ),
-                  const SizedBox(height: 12),
-                  _buildNewsItem(
-                    title: 'Perkembangan Wereng Hijau',
-                    description: 'Wereng hijau mulai terdeteksi di beberapa lahan fase vegetatif. Pantau terus perkembangannya.',
-                    icon: Icons.article_rounded,
-                    iconColor: const Color(0xFF7B1FA2),
-                    date: '17 Mei 2026',
-                  ),
-                  const SizedBox(height: 30),
+
                 ],
               ),
             ),
@@ -632,9 +707,9 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildLegendPercent(const Color(0xFF1B5E20), 'Wereng Coklat', '${coklatPercent.toStringAsFixed(0)}%'),
+                    _buildLegendPercent(const Color(0xFF1B5E20), 'Wereng Coklat', '$coklatTotal Hama'),
                     const SizedBox(height: 16),
-                    _buildLegendPercent(const Color(0xFF00BFA5), 'Wereng Hijau', '${hijauPercent.toStringAsFixed(0)}%'),
+                    _buildLegendPercent(const Color(0xFF00BFA5), 'Wereng Hijau', '$hijauTotal Hama'),
                   ],
                 ),
               ),
@@ -645,7 +720,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
     );
   }
 
-  Widget _buildLegendPercent(Color color, String label, String percent) {
+  Widget _buildLegendPercent(Color color, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -671,7 +746,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
           ],
         ),
         Text(
-          percent,
+          value,
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w800,
@@ -752,88 +827,7 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
     );
   }
 
-  Widget _buildNewsItem({
-    required String title,
-    required String description,
-    required IconData icon,
-    required Color iconColor,
-    required String date,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: iconColor, size: 28),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF4A148C),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                    height: 1.4,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today_rounded, size: 12, color: Colors.grey.shade400),
-                    const SizedBox(width: 4),
-                    Text(
-                      date,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: Color(0xFFBDBDBD),
-            size: 24,
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildBottomNav() {
     return Container(
@@ -855,7 +849,8 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
             children: [
               _buildNavItem(Icons.home_rounded, 'Beranda', 0),
               _buildNavItem(Icons.description_outlined, 'Laporan', 1),
-              _buildNavItem(Icons.notifications_outlined, 'Notifikasi', 2),
+              _buildNavItem(Icons.article_rounded, 'Artikel', 2),
+              _buildNavItem(Icons.notifications_outlined, 'Notifikasi', 3),
             ],
           ),
         ),
@@ -874,6 +869,8 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
           _loadData();
         } else if (index == 1) {
           _laporanKey.currentState?.silentRefresh();
+        } else if (index == 2) {
+          _artikelKey.currentState?.silentRefresh();
         }
       },
       behavior: HitTestBehavior.opaque,
@@ -903,6 +900,351 @@ class _PenyuluhDashboardScreenState extends State<PenyuluhDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPeriodFilterCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calendar_month_rounded, color: Color(0xFF7B1FA2), size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                'Periode Laporan',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A2E),
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const Spacer(),
+              if (_selectedStartMonth != null || _selectedEndMonth != null)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedStartMonth = null;
+                      _selectedEndMonth = null;
+                    });
+                    _loadData();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade300, width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.refresh_rounded, color: Color(0xFF7B1FA2), size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Reset',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF7B1FA2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<DateTime>(
+                      hint: Text(
+                        'Dari Bulan',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      value: _selectedStartMonth,
+                      isExpanded: true,
+                      icon: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.grey.shade700,
+                        size: 18,
+                      ),
+                      style: const TextStyle(
+                        color: Color(0xFF1A1A2E),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      dropdownColor: Colors.white,
+                      items: _generateMonthsList().map((dt) {
+                        return DropdownMenuItem<DateTime>(
+                          value: dt,
+                          child: Text(
+                            _formatMonthName(dt),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF1A1A2E),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedStartMonth = val;
+                          if (_selectedEndMonth != null && val != null && val.isAfter(_selectedEndMonth!)) {
+                            _selectedEndMonth = val;
+                          }
+                        });
+                        _loadData();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Icon(
+                  Icons.trending_flat_rounded,
+                  color: Colors.grey,
+                  size: 16,
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<DateTime>(
+                      hint: Text(
+                        'Sampai Bulan',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      value: _selectedEndMonth,
+                      isExpanded: true,
+                      icon: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.grey.shade700,
+                        size: 18,
+                      ),
+                      style: const TextStyle(
+                        color: Color(0xFF1A1A2E),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      dropdownColor: Colors.white,
+                      items: _generateMonthsList().map((dt) {
+                        return DropdownMenuItem<DateTime>(
+                          value: dt,
+                          child: Text(
+                            _formatMonthName(dt),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF1A1A2E),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedEndMonth = val;
+                          if (_selectedStartMonth != null && val != null && val.isBefore(_selectedStartMonth!)) {
+                            _selectedStartMonth = val;
+                          }
+                        });
+                        _loadData();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesaItem extends StatelessWidget {
+  final String nama;
+  final int jumlahLaporan;
+  final int totalHama;
+  final double progress;
+  final Color color;
+
+  const _DesaItem({
+    required this.nama,
+    required this.jumlahLaporan,
+    required this.totalHama,
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (progress * 100).toInt();
+    
+    // Tentukan tingkat bahaya berdasarkan jumlah total hama yang diidentifikasi
+    String status = 'Tidak Bahaya';
+    Color statusColor = const Color(0xFF2E7D32); // Green
+    IconData statusIcon = Icons.check_circle_outline_rounded;
+
+    if (totalHama >= 15) {
+      status = 'Sangat Bahaya';
+      statusColor = const Color(0xFFC62828); // Red
+      statusIcon = Icons.gpp_bad_rounded;
+    } else if (totalHama >= 5) {
+      status = 'Bahaya';
+      statusColor = const Color(0xFFE65100); // Orange
+      statusIcon = Icons.warning_amber_rounded;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                nama,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: statusColor.withValues(alpha: 0.25), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(statusIcon, color: statusColor, size: 13),
+                  const SizedBox(width: 4),
+                  Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.description_outlined, size: 14, color: Colors.grey.shade500),
+            const SizedBox(width: 4),
+            Text(
+              '$jumlahLaporan Laporan',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Icon(Icons.bug_report_outlined, size: 14, color: Colors.grey.shade500),
+            const SizedBox(width: 4),
+            Text(
+              '$totalHama Hama Terdeteksi',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 6,
+                  backgroundColor: color.withValues(alpha: 0.12),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '$percent%',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

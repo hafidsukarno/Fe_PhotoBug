@@ -4,19 +4,24 @@ import 'package:http/http.dart' as http;
 import 'package:fe_photobug/services/auth_service.dart';
 
 class DetectionService {
-  static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'http://127.0.0.1:8000';
   static const String detectionEndpoint = '$baseUrl/api/petani/detections';
 
-  // Submit detection report with image and description
+  // Submit detection report with image, description, GPS, and rice phase
   static Future<DetectionResponse> submitDetection({
     required Uint8List imageBytes,
     required String fileName,
     String? description,
+    double? latitude,
+    double? longitude,
+    required String ricePhase,
   }) async {
     try {
       print('=== DETECTION SUBMISSION DEBUG ===');
       print('Image File: $fileName');
       print('Description: $description');
+      print('GPS: $latitude, $longitude');
+      print('Rice Phase: $ricePhase');
       print('Token: ${AuthService.authToken}');
 
       // Create multipart request
@@ -39,6 +44,14 @@ class DetectionService {
       if (description != null && description.isNotEmpty) {
         request.fields['description'] = description;
       }
+
+      if (latitude != null) {
+        request.fields['latitude'] = latitude.toString();
+      }
+      if (longitude != null) {
+        request.fields['longitude'] = longitude.toString();
+      }
+      request.fields['rice_phase'] = ricePhase;
 
       // Send request
       var response = await request.send();
@@ -94,11 +107,20 @@ class DetectionService {
   }
 
   // Get history of submitted detections
-  static Future<HistoryResponse> getHistory(String status) async {
+  static Future<HistoryResponse> getHistory(String status, {String? dateFrom, String? dateTo}) async {
     try {
-      final url = status.isEmpty || status == 'all'
-          ? '$baseUrl/api/petani/history'
-          : '$baseUrl/api/petani/history?status=$status';
+      final List<String> params = [];
+      if (status.isNotEmpty && status != 'all') {
+        params.add('status=$status');
+      }
+      if (dateFrom != null) {
+        params.add('date_from=$dateFrom');
+      }
+      if (dateTo != null) {
+        params.add('date_to=$dateTo');
+      }
+      final queryStr = params.isNotEmpty ? '?${params.join('&')}' : '';
+      final url = '$baseUrl/api/petani/history$queryStr';
       
       print('Fetching history from: $url');
       
@@ -224,6 +246,11 @@ class Detection {
   final String? villageName;
   final List<DetectionResult> detectionResults;
   final List<Recommendation> recommendations;
+  final double? latitude;
+  final double? longitude;
+  final String? gpsAddress;
+  final String? ricePhase;
+  final String? hazardLevel;
 
   Detection({
     required this.id,
@@ -235,8 +262,12 @@ class Detection {
     required this.detectionResults,
     required this.recommendations,
     this.villageName,
+    this.latitude,
+    this.longitude,
+    this.gpsAddress,
+    this.ricePhase,
+    this.hazardLevel,
   });
-
   factory Detection.fromJson(Map<String, dynamic> json) {
     String? villageName;
     try {
@@ -244,7 +275,16 @@ class Detection {
     } catch (e) {
       print('Error extracting village name: $e');
     }
-    
+
+    double? lat;
+    double? lng;
+    if (json['latitude'] != null) {
+      lat = double.tryParse(json['latitude'].toString());
+    }
+    if (json['longitude'] != null) {
+      lng = double.tryParse(json['longitude'].toString());
+    }
+
     return Detection(
       id: json['id'] ?? 0,
       userId: json['user_id'] ?? 0,
@@ -261,6 +301,11 @@ class Detection {
             .map((x) => Recommendation.fromJson(x as Map<String, dynamic>)),
       ),
       villageName: villageName,
+      latitude: lat,
+      longitude: lng,
+      gpsAddress: json['gps_address'] as String?,
+      ricePhase: json['rice_phase']?.toString(),
+      hazardLevel: json['hazard_level']?.toString(),
     );
   }
 

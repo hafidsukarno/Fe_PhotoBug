@@ -4,6 +4,7 @@ import 'package:fe_photobug/screens/petani/riwayat_laporan_view.dart';
 import 'package:fe_photobug/screens/auth/login_screen.dart';
 import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/services/report_service.dart';
+import 'package:fe_photobug/services/admin_service.dart';
 import 'package:fe_photobug/utils/dialog_utils.dart';
 
 class PetaniDashboardScreen extends StatefulWidget {
@@ -17,13 +18,46 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
   int _currentIndex = 0;
   final GlobalKey<RiwayatLaporanViewState> _riwayatKey = GlobalKey<RiwayatLaporanViewState>();
   bool _isLoadingStatus = true;
+  bool _isLoadingArticles = true;
   String _petaniVillage = 'Loading...';
   late ReportStatusResponse _reportStatus;
+  List<ArticleItem> _articlesList = [];
+
+  DateTime? _selectedStartMonth;
+  DateTime? _selectedEndMonth;
+
+  List<DateTime> _generateMonthsList() {
+    final list = <DateTime>[];
+    final now = DateTime.now();
+    for (int i = 0; i < 24; i++) {
+      list.add(DateTime(now.year, now.month - i, 1));
+    }
+    return list;
+  }
+
+  String _formatMonthName(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return "${months[dt.month - 1]} ${dt.year}";
+  }
+
+  String _formatDateString(String dateStr) {
+    try {
+      final parsed = DateTime.tryParse(dateStr);
+      if (parsed == null) return dateStr;
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
+    } catch (_) {
+      return dateStr;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _loadReportStatus();
+    final now = DateTime.now();
+    _selectedStartMonth = DateTime(now.year, now.month, 1);
+    _selectedEndMonth = DateTime(now.year, now.month, 1);
+    _loadAll();
     _loadPetaniVillage();
   }
 
@@ -34,13 +68,36 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
     });
   }
 
-  Future<void> _loadReportStatus() async {
-    final status = await ReportService.getReportStatus();
+  Future<void> _loadAll() async {
     setState(() {
-      _reportStatus = status;
-      _isLoadingStatus = false;
+      _isLoadingStatus = true;
+      _isLoadingArticles = true;
     });
+
+    String? startStr;
+    String? endStr;
+    if (_selectedStartMonth != null) {
+      startStr = "${_selectedStartMonth!.year}-${_selectedStartMonth!.month.toString().padLeft(2, '0')}-01";
+    }
+    if (_selectedEndMonth != null) {
+      final lastDay = DateTime(_selectedEndMonth!.year, _selectedEndMonth!.month + 1, 0).day;
+      endStr = "${_selectedEndMonth!.year}-${_selectedEndMonth!.month.toString().padLeft(2, '0')}-$lastDay";
+    }
+
+    final status = await ReportService.getReportStatus(dateFrom: startStr, dateTo: endStr);
+    final articles = await ReportService.getArticles();
+
+    if (mounted) {
+      setState(() {
+        _reportStatus = status;
+        _articlesList = articles;
+        _isLoadingStatus = false;
+        _isLoadingArticles = false;
+      });
+    }
   }
+
+  Future<void> _loadReportStatus() async => _loadAll();
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +119,11 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
               _riwayatKey.currentState?.silentRefresh(); // Refresh riwayat
             },
           ),
-          RiwayatLaporanView(key: _riwayatKey),
+          RiwayatLaporanView(
+            key: _riwayatKey,
+            selectedStartMonth: _selectedStartMonth,
+            selectedEndMonth: _selectedEndMonth,
+          ),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),
@@ -80,6 +141,8 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                _buildPeriodFilterCard(),
+                const SizedBox(height: 24),
                 const Text(
                   'Status Laporan',
                   style: TextStyle(
@@ -95,38 +158,7 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
                 _buildStatsGrid(),
                 const SizedBox(height: 28),
 
-                const Text(
-                  'Info Hama Terkini',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF4A148C),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Single News Card - Wereng Coklat with Image
-                _buildNewsCard(),
-                const SizedBox(height: 16),
-
-                // Simple article cards
-                _buildSimpleNewsCard(
-                  title: 'Tips Pencegahan Hama Wereng',
-                  description:
-                      'Gunakan varietas tahan wereng, atur jadwal tanam serempak, dan pertahankan musuh alami di ekosistem sawah.',
-                  icon: Icons.tips_and_updates_rounded,
-                  date: '15 Mei 2026',
-                ),
-                const SizedBox(height: 12),
-
-                _buildSimpleNewsCard(
-                  title: 'Musim Hujan: Waspadai Ledakan Populasi',
-                  description:
-                      'BMKG memperkirakan curah hujan tinggi minggu ini. Petani diminta meningkatkan pengawasan terhadap populasi wereng.',
-                  icon: Icons.warning_amber_rounded,
-                  date: '14 Mei 2026',
-                ),
+                _buildArticlesSection(),
                 const SizedBox(height: 28),
                 const Text(
                   'Layanan Pelaporan',
@@ -974,4 +1006,621 @@ class _PetaniDashboardScreenState extends State<PetaniDashboardScreen> {
       ),
     );
   }
+
+  // ========== PERIODE FILTER CARD ==========
+  Widget _buildPeriodFilterCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calendar_month_rounded, color: Color(0xFF7B1FA2), size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                'Periode Laporan',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A2E),
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const Spacer(),
+              if (_selectedStartMonth != null || _selectedEndMonth != null)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedStartMonth = null;
+                      _selectedEndMonth = null;
+                    });
+                    _loadAll();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E5F5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.refresh_rounded, color: Color(0xFF7B1FA2), size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Reset',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF7B1FA2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200, width: 1),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<DateTime>(
+                      hint: Text('Dari Bulan', style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
+                      value: _selectedStartMonth,
+                      isExpanded: true,
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF7B1FA2), size: 18),
+                      style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 12.5, fontWeight: FontWeight.bold),
+                      dropdownColor: Colors.white,
+                      items: _generateMonthsList().map((dt) => DropdownMenuItem<DateTime>(
+                        value: dt,
+                        child: Text(_formatMonthName(dt), style: const TextStyle(fontSize: 12.5, color: Color(0xFF1A1A2E), fontWeight: FontWeight.w600)),
+                      )).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedStartMonth = val;
+                          if (_selectedEndMonth != null && val != null && val.isAfter(_selectedEndMonth!)) {
+                            _selectedEndMonth = val;
+                          }
+                        });
+                        _loadAll();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Icon(Icons.trending_flat_rounded, color: Colors.grey, size: 16),
+              ),
+              Expanded(
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200, width: 1),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<DateTime>(
+                      hint: Text('Sampai Bulan', style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
+                      value: _selectedEndMonth,
+                      isExpanded: true,
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF7B1FA2), size: 18),
+                      style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 12.5, fontWeight: FontWeight.bold),
+                      dropdownColor: Colors.white,
+                      items: _generateMonthsList().map((dt) => DropdownMenuItem<DateTime>(
+                        value: dt,
+                        child: Text(_formatMonthName(dt), style: const TextStyle(fontSize: 12.5, color: Color(0xFF1A1A2E), fontWeight: FontWeight.w600)),
+                      )).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedEndMonth = val;
+                          if (_selectedStartMonth != null && val != null && val.isBefore(_selectedStartMonth!)) {
+                            _selectedStartMonth = val;
+                          }
+                        });
+                        _loadAll();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ========== ARTICLES SECTION ==========
+  Widget _buildArticlesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Artikel & Edukasi',
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E), letterSpacing: -0.4),
+                ),
+                Text('Pengetahuan dari Admin & Penyuluh', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF7B1FA2), Color(0xFF9C27B0)]),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.menu_book_rounded, color: Colors.white, size: 13),
+                  SizedBox(width: 5),
+                  Text('Baca', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Loading state
+        if (_isLoadingArticles)
+          Container(
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
+            ),
+            child: const Center(child: CircularProgressIndicator(color: Color(0xFF7B1FA2), strokeWidth: 2.5)),
+          )
+
+        // Empty state
+        else if (_articlesList.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey.shade100),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3))],
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: const Color(0xFFF3E5F5), shape: BoxShape.circle),
+                  child: const Icon(Icons.article_rounded, size: 36, color: Color(0xFF9C27B0)),
+                ),
+                const SizedBox(height: 12),
+                const Text('Belum ada artikel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+                const SizedBox(height: 4),
+                Text('Artikel dari Admin & Penyuluh\nakan tampil di sini', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey.shade500, height: 1.5)),
+              ],
+            ),
+          )
+
+        else
+          Column(
+            children: [
+              // Featured hero card - article[0]
+              _buildHeroArticleCard(_articlesList[0]),
+
+              // Remaining articles in horizontal scroll
+              if (_articlesList.length > 1) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 200,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _articlesList.length - 1,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (ctx, i) => _buildSmallArticleCard(_articlesList[i + 1]),
+                  ),
+                ),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHeroArticleCard(ArticleItem article) {
+    return GestureDetector(
+      onTap: () => _showArticleDetail(article),
+      child: Container(
+        height: 220,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: const Color(0xFF7B1FA2).withValues(alpha: 0.20), blurRadius: 20, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background image or gradient fallback
+              if (article.imageUrl != null)
+                Image.network(
+                  article.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF4A148C), Color(0xFF9C27B0)],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF4A148C), Color(0xFF7B1FA2), Color(0xFF9C27B0)],
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(top: -20, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.05)))),
+                      Positioned(bottom: -30, left: 30, child: Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.04)))),
+                      const Center(child: Icon(Icons.article_rounded, size: 64, color: Colors.white30)),
+                    ],
+                  ),
+                ),
+
+              // Dark gradient overlay from bottom
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.15), Colors.black.withValues(alpha: 0.75)],
+                    stops: const [0.0, 0.4, 1.0],
+                  ),
+                ),
+              ),
+
+              // Content overlay
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9C27B0),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(article.theme, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3)),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 0.5),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.auto_awesome, size: 10, color: Colors.white70),
+                                const SizedBox(width: 4),
+                                const Text('Unggulan', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        article.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, height: 1.3, letterSpacing: -0.2),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
+                            child: const Icon(Icons.person_rounded, size: 11, color: Colors.white),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(article.authorName, style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              const Icon(Icons.access_time_rounded, size: 11, color: Colors.white54),
+                              const SizedBox(width: 4),
+                              Text(_formatDateString(article.createdAt), style: const TextStyle(fontSize: 10.5, color: Colors.white54, fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Tap ripple area
+              Material(color: Colors.transparent, child: InkWell(onTap: () => _showArticleDetail(article), splashColor: Colors.white.withValues(alpha: 0.1))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallArticleCard(ArticleItem article) {
+    return GestureDetector(
+      onTap: () => _showArticleDetail(article),
+      child: Container(
+        width: 175,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.grey.shade100),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image top
+            ClipRRect(
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(22), topRight: Radius.circular(22)),
+              child: SizedBox(
+                width: double.infinity,
+                height: 108,
+                child: article.imageUrl != null
+                    ? Image.network(article.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _articlePlaceholder())
+                    : _articlePlaceholder(),
+              ),
+            ),
+            // Info
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(6)),
+                      child: Text(article.theme, style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w800, color: Color(0xFF7B1FA2))),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      article.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E), height: 1.3),
+                    ),
+                    const Spacer(),
+                    Text(
+                      article.authorName,
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _articlePlaceholder() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF7B1FA2), Color(0xFF9C27B0)],
+        ),
+      ),
+      child: const Center(child: Icon(Icons.article_rounded, size: 32, color: Colors.white30)),
+    );
+  }
+
+  void _showArticleDetail(ArticleItem article) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.90,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(topLeft: Radius.circular(32), topRight: Radius.circular(32)),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 4),
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+              // Header hero image
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 190,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (article.imageUrl != null)
+                          Image.network(
+                            article.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _detailImageFallback(),
+                          )
+                        else
+                          _detailImageFallback(),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.5)],
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 16, bottom: 16,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(color: const Color(0xFF9C27B0), borderRadius: BorderRadius.circular(20)),
+                            child: Text(article.theme, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+                  children: [
+                    Text(
+                      article.title,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E), height: 1.3, letterSpacing: -0.3),
+                    ),
+                    const SizedBox(height: 14),
+                    // Author & date row
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F0FF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE1BEE7), width: 0.8),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36, height: 36,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(colors: [Color(0xFF7B1FA2), Color(0xFF9C27B0)]),
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              article.authorName.isNotEmpty ? article.authorName[0].toUpperCase() : '?',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(article.authorName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+                                Text('Dipublikasikan ${_formatDateString(article.createdAt)}', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(10)),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.visibility_rounded, size: 12, color: Color(0xFF7B1FA2)),
+                                SizedBox(width: 4),
+                                Text('Baca', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF7B1FA2))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Container(height: 1, color: Colors.grey.shade100),
+                    const SizedBox(height: 22),
+                    // Content
+                    Text(
+                      article.content,
+                      style: const TextStyle(fontSize: 14.5, color: Color(0xFF3D3D3D), height: 1.75, fontWeight: FontWeight.w400, letterSpacing: 0.1),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailImageFallback() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF4A148C), Color(0xFF7B1FA2), Color(0xFF9C27B0)],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(top: -20, right: -20, child: Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.05)))),
+          const Center(child: Icon(Icons.article_rounded, size: 56, color: Colors.white24)),
+        ],
+      ),
+    );
+  }
 }
+

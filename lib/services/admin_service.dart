@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:fe_photobug/services/auth_service.dart';
 
@@ -130,13 +131,62 @@ class PenyuluhItem {
   }
 }
 
-class AdminService {
-  static const String baseUrl = 'http://localhost:8000';
+class ArticleItem {
+  final int id;
+  final String title;
+  final String slug;
+  final String authorName;
+  final String theme;
+  final String content;
+  final String? imagePath;
+  final String? imageUrl;
+  final String? creatorName;
+  final String createdAt;
 
-  static Future<AdminDashboardData?> getDashboardStats() async {
+  ArticleItem({
+    required this.id,
+    required this.title,
+    required this.slug,
+    required this.authorName,
+    required this.theme,
+    required this.content,
+    this.imagePath,
+    this.imageUrl,
+    this.creatorName,
+    required this.createdAt,
+  });
+
+  factory ArticleItem.fromJson(Map<String, dynamic> json) {
+    return ArticleItem(
+      id: json['id'] ?? 0,
+      title: json['title']?.toString() ?? '',
+      slug: json['slug']?.toString() ?? '',
+      authorName: json['author_name']?.toString() ?? '',
+      theme: json['theme']?.toString() ?? '',
+      content: json['content']?.toString() ?? '',
+      imagePath: json['image_path']?.toString(),
+      imageUrl: json['image_url']?.toString(),
+      creatorName: json['creator']?['name']?.toString(),
+      createdAt: json['created_at']?.toString() ?? '',
+    );
+  }
+}
+
+class AdminService {
+  static const String baseUrl = 'http://127.0.0.1:8000';
+
+  static Future<AdminDashboardData?> getDashboardStats({String? dateFrom, String? dateTo}) async {
     try {
+      String url = '$baseUrl/api/admin/dashboard';
+      final params = <String>[];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      if (params.isNotEmpty) {
+        url += '?${params.join('&')}';
+      }
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/admin/dashboard'),
+        Uri.parse(url),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -156,10 +206,18 @@ class AdminService {
     }
   }
 
-  static Future<VillagesReportData?> getVillagesReport() async {
+  static Future<VillagesReportData?> getVillagesReport({String? dateFrom, String? dateTo}) async {
     try {
+      String url = '$baseUrl/api/admin/villages-report';
+      final params = <String>[];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      if (params.isNotEmpty) {
+        url += '?${params.join('&')}';
+      }
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/admin/villages-report'),
+        Uri.parse(url),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -184,10 +242,18 @@ class AdminService {
     }
   }
 
-  static Future<PestStatisticsData?> getPestStatistics() async {
+  static Future<PestStatisticsData?> getPestStatistics({String? dateFrom, String? dateTo}) async {
     try {
+      String url = '$baseUrl/api/admin/pest-statistics';
+      final params = <String>[];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      if (params.isNotEmpty) {
+        url += '?${params.join('&')}';
+      }
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/admin/pest-statistics'),
+        Uri.parse(url),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -476,6 +542,152 @@ class AdminService {
           if (data['error'] != null) return data['error'].toString();
         } catch (_) {}
         return 'Gagal menghapus penyuluh (Status: ${response.statusCode})';
+      }
+    } catch (e) {
+      return 'Terjadi kesalahan sistem: $e';
+    }
+  }
+
+  // ==================== ARTICLE CRUD ====================
+
+  static Future<List<ArticleItem>> getArticles() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/admin/articles'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${AuthService.authToken}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          final List list = data['data'] ?? [];
+          return list.map((e) => ArticleItem.fromJson(e)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error getArticles: $e');
+      return [];
+    }
+  }
+
+  static Future<String?> createArticle({
+    required String title,
+    required String authorName,
+    required String theme,
+    required String content,
+    Uint8List? imageBytes,
+    String? imageName,
+  }) async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/admin/articles'));
+      
+      request.headers['Authorization'] = 'Bearer ${AuthService.authToken}';
+      request.headers['Accept'] = 'application/json';
+
+      request.fields['title'] = title;
+      request.fields['author_name'] = authorName;
+      request.fields['theme'] = theme;
+      request.fields['content'] = content;
+
+      if (imageBytes != null && imageName != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'image',
+            imageBytes,
+            filename: imageName,
+          ),
+        );
+      }
+
+      var response = await request.send();
+      var responseData = await response.stream.toBytes();
+      var responseString = String.fromCharCodes(responseData);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return null; // success
+      } else {
+        try {
+          final data = jsonDecode(responseString);
+          if (data['message'] != null) return data['message'].toString();
+        } catch (_) {}
+        return 'Gagal membuat artikel (Status: ${response.statusCode})';
+      }
+    } catch (e) {
+      return 'Terjadi kesalahan sistem: $e';
+    }
+  }
+
+  static Future<String?> updateArticle({
+    required int id,
+    required String title,
+    required String authorName,
+    required String theme,
+    required String content,
+    Uint8List? imageBytes,
+    String? imageName,
+  }) async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/admin/articles/$id'));
+      
+      request.headers['Authorization'] = 'Bearer ${AuthService.authToken}';
+      request.headers['Accept'] = 'application/json';
+
+      request.fields['_method'] = 'PUT';
+      request.fields['title'] = title;
+      request.fields['author_name'] = authorName;
+      request.fields['theme'] = theme;
+      request.fields['content'] = content;
+
+      if (imageBytes != null && imageName != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'image',
+            imageBytes,
+            filename: imageName,
+          ),
+        );
+      }
+
+      var response = await request.send();
+      var responseData = await response.stream.toBytes();
+      var responseString = String.fromCharCodes(responseData);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return null; // success
+      } else {
+        try {
+          final data = jsonDecode(responseString);
+          if (data['message'] != null) return data['message'].toString();
+        } catch (_) {}
+        return 'Gagal mengupdate artikel (Status: ${response.statusCode})';
+      }
+    } catch (e) {
+      return 'Terjadi kesalahan sistem: $e';
+    }
+  }
+
+  static Future<String?> deleteArticle(int id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/admin/articles/$id'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${AuthService.authToken}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return null; // success
+      } else {
+        try {
+          final data = jsonDecode(response.body);
+          if (data['message'] != null) return data['message'].toString();
+        } catch (_) {}
+        return 'Gagal menghapus artikel (Status: ${response.statusCode})';
       }
     } catch (e) {
       return 'Terjadi kesalahan sistem: $e';

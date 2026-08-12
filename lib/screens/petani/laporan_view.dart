@@ -5,6 +5,9 @@ import 'package:fe_photobug/services/auth_service.dart';
 import 'package:fe_photobug/services/detection_service.dart';
 import 'package:fe_photobug/utils/dialog_utils.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -22,12 +25,103 @@ class _LaporanViewState extends State<LaporanView> {
   File? _selectedImageFile;
   Uint8List? _imageBytes;
   bool _isSubmitting = false;
+  bool _isGettingLocation = false;
+  String _locationName = '';
   final TextEditingController _descController = TextEditingController();
+  final TextEditingController _latController = TextEditingController();
+  final TextEditingController _lngController = TextEditingController();
+  String _selectedPhase = 'vegetatif';
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-get GPS on page load
+    WidgetsBinding.instance.addPostFrameCallback((_) => _getGpsLocation());
+  }
 
   @override
   void dispose() {
     _descController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
     super.dispose();
+  }
+
+  Future<void> _getGpsLocation() async {
+    setState(() => _isGettingLocation = true);
+    try {
+      // Check & request permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Izin lokasi ditolak. Masukkan koordinat secara manual.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        setState(() => _isGettingLocation = false);
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      final lat = position.latitude;
+      final lng = position.longitude;
+
+      // Reverse geocoding via Nominatim (OpenStreetMap)
+      String locationName = 'Lat: ${lat.toStringAsFixed(4)}, Lng: ${lng.toStringAsFixed(4)}';
+      try {
+        final uri = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json&accept-language=id',
+        );
+        final geoResponse = await http.get(uri, headers: {'User-Agent': 'PhotoBug-App/1.0'});
+        if (geoResponse.statusCode == 200) {
+          final geoData = jsonDecode(geoResponse.body);
+          final addr = geoData['address'] as Map<String, dynamic>? ?? {};
+          // Build a human-readable address: village + subdistrict + city/regency
+          final parts = <String>[];
+          final village = addr['village'] ?? addr['hamlet'] ?? addr['neighbourhood'] ?? addr['suburb'] ?? '';
+          final subdistrict = addr['subdistrict'] ?? addr['suburb'] ?? addr['town'] ?? '';
+          final city = addr['city'] ?? addr['regency'] ?? addr['county'] ?? addr['state_district'] ?? '';
+          final state = addr['state'] ?? '';
+          if (village.toString().isNotEmpty) parts.add(village.toString());
+          if (subdistrict.toString().isNotEmpty && subdistrict != village) parts.add(subdistrict.toString());
+          if (city.toString().isNotEmpty) parts.add(city.toString());
+          if (state.toString().isNotEmpty) parts.add(state.toString());
+          if (parts.isNotEmpty) locationName = parts.join(', ');
+        }
+      } catch (_) {
+        // Keep fallback to coordinates if geocoding fails
+      }
+
+      setState(() {
+        _latController.text = lat.toStringAsFixed(6);
+        _lngController.text = lng.toStringAsFixed(6);
+        _locationName = locationName;
+        _isGettingLocation = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mendapatkan lokasi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      setState(() => _isGettingLocation = false);
+    }
   }
 
   Future<void> _pickImage() async {
@@ -65,10 +159,18 @@ class _LaporanViewState extends State<LaporanView> {
       _isSubmitting = true;
     });
 
+    String fileName = _selectedImageFile?.path.split('/').last ?? 'image.jpg';
+    if (!fileName.contains('.')) {
+      fileName = '$fileName.jpg';
+    }
+
     final response = await DetectionService.submitDetection(
       imageBytes: _imageBytes!,
-      fileName: _selectedImageFile?.path.split('/').last ?? 'image.jpg',
+      fileName: fileName,
       description: _descController.text,
+      latitude: double.tryParse(_latController.text.trim()),
+      longitude: double.tryParse(_lngController.text.trim()),
+      ricePhase: _selectedPhase,
     );
 
     setState(() {
@@ -470,6 +572,191 @@ class _LaporanViewState extends State<LaporanView> {
                         ),
                       ),
                       const SizedBox(height: 20),
+
+                      // Rice Phase Dropdown
+                      const Text(
+                        'Fase Pertumbuhan Padi',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FA),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedPhase,
+                            isExpanded: true,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF7B1FA2)),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'vegetatif',
+                                child: Text('Fase Vegetatif (< 40 HST)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50))),
+                              ),
+                              DropdownMenuItem(
+                                value: 'generatif',
+                                child: Text('Fase Generatif (~40-60 HST)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50))),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedPhase = val;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // GPS Section
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF4A148C).withValues(alpha: 0.05),
+                              const Color(0xFF7B1FA2).withValues(alpha: 0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFF7B1FA2).withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.location_on_rounded, color: Color(0xFF7B1FA2), size: 18),
+                                const SizedBox(width: 6),
+                                const Text(
+                                  'Koordinat GPS',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF4A148C)),
+                                ),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: _isGettingLocation ? null : _getGpsLocation,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      gradient: _isGettingLocation
+                                          ? const LinearGradient(colors: [Colors.grey, Colors.grey])
+                                          : const LinearGradient(colors: [Color(0xFF7B1FA2), Color(0xFF9C27B0)]),
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF7B1FA2).withValues(alpha: 0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: _isGettingLocation
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation(Colors.white),
+                                            ),
+                                          )
+                                        : const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.my_location_rounded, color: Colors.white, size: 13),
+                                              SizedBox(width: 5),
+                                              Text('Ambil Lokasi', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                                            ],
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            // Location display
+                            if (_latController.text.isNotEmpty && _lngController.text.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.4)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFE8F5E9),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.place_rounded, color: Color(0xFF4CAF50), size: 16),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _locationName,
+                                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E), height: 1.3),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            '${_latController.text}, ${_lngController.text}',
+                                            style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          const Text('✓ Lokasi GPS terdeteksi', style: TextStyle(fontSize: 10.5, color: Color(0xFF4CAF50), fontWeight: FontWeight.w600)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (!_isGettingLocation)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.orange.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.location_off_rounded, color: Colors.orange.shade600, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text('Tekan tombol untuk mendapatkan lokasi GPS', style: TextStyle(fontSize: 11.5, color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.shade200)),
+                                child: Row(
+                                  children: [
+                                    SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.blue.shade600))),
+                                    const SizedBox(width: 10),
+                                    Text('Mendapatkan lokasi GPS...', style: TextStyle(fontSize: 11.5, color: Colors.blue.shade700, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
 
                       // Description Field
                       const Text(

@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:fe_photobug/services/auth_service.dart';
+import 'package:fe_photobug/services/admin_service.dart';
 
 class PenyuluhReportStatusResponse {
   final bool success;
@@ -27,6 +29,8 @@ class PenyuluhReportItem {
   final String confidence;
   final String status;
   final String detectedAt;
+  final String? ricePhase;
+  final String? hazardLevel;
 
   PenyuluhReportItem({
     required this.id,
@@ -37,6 +41,8 @@ class PenyuluhReportItem {
     required this.confidence,
     required this.status,
     required this.detectedAt,
+    this.ricePhase,
+    this.hazardLevel,
   });
 }
 
@@ -72,6 +78,11 @@ class PenyuluhReportDetail {
   final String? penyuluhRecommendation;
   final String status;
   final String detectedAt;
+  final String? ricePhase;
+  final String? hazardLevel;
+  final double? latitude;
+  final double? longitude;
+  final String? gpsAddress;
 
   PenyuluhReportDetail({
     required this.id,
@@ -87,6 +98,11 @@ class PenyuluhReportDetail {
     this.penyuluhRecommendation,
     required this.status,
     required this.detectedAt,
+    this.ricePhase,
+    this.hazardLevel,
+    this.latitude,
+    this.longitude,
+    this.gpsAddress,
   });
 }
 
@@ -145,7 +161,7 @@ class NotificationsResponse {
 class VillagesResponse {
   final bool success;
   final String? message;
-  final List<String> data;
+  final List<VillageReportItem> data;
 
   VillagesResponse({
     required this.success,
@@ -176,10 +192,15 @@ class PestTrendResponse {
 class PenyuluhService {
   static const String baseUrl = 'http://127.0.0.1:8000';
 
-  static Future<PenyuluhReportStatusResponse> getReportStatus() async {
+  static Future<PenyuluhReportStatusResponse> getReportStatus({String? dateFrom, String? dateTo}) async {
     try {
+      final List<String> params = [];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      final queryStr = params.isNotEmpty ? '?${params.join('&')}' : '';
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/penyuluh/report-status'),
+        Uri.parse('$baseUrl/api/penyuluh/report-status$queryStr'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -202,10 +223,15 @@ class PenyuluhService {
     }
   }
 
-  static Future<PestTrendResponse> getPestTrend() async {
+  static Future<PestTrendResponse> getPestTrend({String? dateFrom, String? dateTo}) async {
     try {
+      final List<String> params = [];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      final queryStr = params.isNotEmpty ? '?${params.join('&')}' : '';
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/penyuluh/pest-trend'),
+        Uri.parse('$baseUrl/api/penyuluh/pest-trend$queryStr'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -227,10 +253,15 @@ class PenyuluhService {
     }
   }
 
-  static Future<VillagesResponse> getVillages() async {
+  static Future<VillagesResponse> getVillages({String? dateFrom, String? dateTo}) async {
     try {
+      final List<String> params = [];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      final queryStr = params.isNotEmpty ? '?${params.join('&')}' : '';
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/penyuluh/villages'),
+        Uri.parse('$baseUrl/api/penyuluh/villages$queryStr'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -240,7 +271,7 @@ class PenyuluhService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final list = data['data'] as List<dynamic>? ?? [];
-        final villages = list.map((item) => item.toString()).toList();
+        final villages = list.map((item) => VillageReportItem.fromJson(item)).toList();
         return VillagesResponse(success: true, data: villages);
       }
       return VillagesResponse(success: false, message: 'Failed to fetch villages');
@@ -249,10 +280,15 @@ class PenyuluhService {
     }
   }
 
-  static Future<PenyuluhReportResponse> getReports([String type = 'all']) async {
+  static Future<PenyuluhReportResponse> getReports([String type = 'all', String? dateFrom, String? dateTo]) async {
     try {
+      final List<String> params = [];
+      if (dateFrom != null) params.add('date_from=$dateFrom');
+      if (dateTo != null) params.add('date_to=$dateTo');
+      final queryStr = params.isNotEmpty ? '?${params.join('&')}' : '';
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/penyuluh/detections'),
+        Uri.parse('$baseUrl/api/penyuluh/detections$queryStr'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer ${AuthService.authToken}',
@@ -272,6 +308,8 @@ class PenyuluhService {
           confidence: item['confidence']?.toString() ?? '',
           status: item['status']?.toString() ?? '',
           detectedAt: item['detected_at']?.toString() ?? '',
+          ricePhase: item['rice_phase']?.toString(),
+          hazardLevel: item['hazard_level']?.toString(),
         )).toList();
 
         // Filter based on type if API returns all
@@ -323,6 +361,11 @@ class PenyuluhService {
           penyuluhRecommendation: item['penyuluh_recommendation']?.toString(),
           status: item['status']?.toString() ?? '',
           detectedAt: item['detected_at']?.toString() ?? '',
+          ricePhase: item['rice_phase']?.toString(),
+          hazardLevel: item['hazard_level']?.toString(),
+          latitude: item['latitude'] != null ? double.tryParse(item['latitude'].toString()) : null,
+          longitude: item['longitude'] != null ? double.tryParse(item['longitude'].toString()) : null,
+          gpsAddress: item['gps_address']?.toString(),
         );
 
         return PenyuluhReportDetailResponse(success: true, data: detail);
@@ -374,6 +417,150 @@ class PenyuluhService {
       return NotificationsResponse(success: false, message: 'Failed to load notifications', data: []);
     } catch (e) {
       return NotificationsResponse(success: false, message: 'Error: $e', data: []);
+    }
+  }
+
+  static Future<List<ArticleItem>> getArticles() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/penyuluh/articles'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${AuthService.authToken}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          final List list = data['data'] ?? [];
+          return list.map((e) => ArticleItem.fromJson(e)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error getArticles: $e');
+      return [];
+    }
+  }
+
+  static Future<String?> createArticle({
+    required String title,
+    required String authorName,
+    required String theme,
+    required String content,
+    Uint8List? imageBytes,
+    String? imageName,
+  }) async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/penyuluh/articles'));
+      
+      request.headers['Authorization'] = 'Bearer ${AuthService.authToken}';
+      request.headers['Accept'] = 'application/json';
+
+      request.fields['title'] = title;
+      request.fields['author_name'] = authorName;
+      request.fields['theme'] = theme;
+      request.fields['content'] = content;
+
+      if (imageBytes != null && imageName != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'image',
+            imageBytes,
+            filename: imageName,
+          ),
+        );
+      }
+
+      var response = await request.send();
+      var responseData = await response.stream.toBytes();
+      var responseString = String.fromCharCodes(responseData);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return null; // success
+      } else {
+        try {
+          final data = jsonDecode(responseString);
+          if (data['message'] != null) return data['message'].toString();
+        } catch (_) {}
+        return 'Gagal membuat artikel (Status: ${response.statusCode})';
+      }
+    } catch (e) {
+      return 'Terjadi kesalahan sistem: $e';
+    }
+  }
+
+  static Future<String?> updateArticle({
+    required int id,
+    required String title,
+    required String authorName,
+    required String theme,
+    required String content,
+    Uint8List? imageBytes,
+    String? imageName,
+  }) async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/penyuluh/articles/$id'));
+      
+      request.headers['Authorization'] = 'Bearer ${AuthService.authToken}';
+      request.headers['Accept'] = 'application/json';
+
+      request.fields['_method'] = 'PUT';
+      request.fields['title'] = title;
+      request.fields['author_name'] = authorName;
+      request.fields['theme'] = theme;
+      request.fields['content'] = content;
+
+      if (imageBytes != null && imageName != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'image',
+            imageBytes,
+            filename: imageName,
+          ),
+        );
+      }
+
+      var response = await request.send();
+      var responseData = await response.stream.toBytes();
+      var responseString = String.fromCharCodes(responseData);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return null; // success
+      } else {
+        try {
+          final data = jsonDecode(responseString);
+          if (data['message'] != null) return data['message'].toString();
+        } catch (_) {}
+        return 'Gagal mengupdate artikel (Status: ${response.statusCode})';
+      }
+    } catch (e) {
+      return 'Terjadi kesalahan sistem: $e';
+    }
+  }
+
+  static Future<String?> deleteArticle(int id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/penyuluh/articles/$id'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${AuthService.authToken}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return null; // success
+      } else {
+        try {
+          final data = jsonDecode(response.body);
+          if (data['message'] != null) return data['message'].toString();
+        } catch (_) {}
+        return 'Gagal menghapus artikel (Status: ${response.statusCode})';
+      }
+    } catch (e) {
+      return 'Terjadi kesalahan sistem: $e';
     }
   }
 }
